@@ -691,6 +691,51 @@ select.ws-tool { width: 86px; }
   .ws-tools .ws-tool:not(.ws-run):not(#ws-save) { display: none; }
 }
 
+/* ---------- Agent ---------- */
+.agent { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.agent-bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 88%, transparent); flex-wrap: wrap; }
+.agent-bar select { max-width: 360px; padding: 6px 8px; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; color: var(--text); }
+.agent-auto { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.agent-log { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.agent-log > * { width: 100%; max-width: 860px; margin: 0 auto; }
+.agent-welcome { margin-top: 6vh !important; text-align: center; color: var(--muted); }
+.agent-welcome h2 { color: var(--text); font-weight: 600; font-size: 22px; margin: 0 0 8px; }
+.agent-welcome p { max-width: 620px; margin: 0 auto 18px; }
+.agent-examples { display: grid; gap: 8px; margin-bottom: 16px; text-align: left; }
+.agent-item.user { display: flex; justify-content: flex-end; margin-top: 8px; }
+.agent-bubble { background: var(--user-bubble); border: 1px solid var(--border); border-radius: 8px 8px 2px 8px; padding: 8px 14px; max-width: 85%; white-space: pre-wrap; }
+.agent-item.assistant { font-size: 14.5px; }
+.agent-item.final { border-left: 2px solid #0078d4; padding-left: 12px; margin-top: 4px; }
+.agent-item.status { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.agent-item.tool { border: 1px solid var(--border); border-radius: 4px; background: var(--surface); font-size: 13px; }
+.agent-item.tool summary { display: flex; align-items: center; gap: 8px; padding: 5px 10px; cursor: pointer; list-style: none; }
+.agent-item.tool summary::-webkit-details-marker { display: none; }
+.agent-ticon { width: 18px; text-align: center; color: var(--accent); flex: none; }
+.agent-tool-text { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-state { flex: none; font-weight: 700; }
+.agent-item.tool.ok .agent-state { color: var(--ok); }
+.agent-item.tool.fail { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.agent-item.tool.fail .agent-state, .agent-item.tool.fail .agent-summary { color: var(--danger); }
+.agent-summary { padding: 0 10px 6px 36px; color: var(--muted); font-size: 12.5px; }
+.agent-item.tool .code-block, .agent-item.tool pre.agent-out, .agent-item.tool .agent-diff, .agent-item.tool .agent-advisor { margin: 0 10px 10px; }
+.agent-item.tool .code-block pre { max-height: 360px; }
+pre.agent-out, pre.agent-diff { padding: 8px 10px; border-radius: 4px; background: var(--code-bg); border: 1px solid var(--border); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+.agent-out .cmd { color: var(--accent); }
+.agent-out .ok { color: var(--ok); } .agent-out .err { color: var(--danger); }
+.agent-diff .add { color: #73c991; } .agent-diff .del { color: #f14c4c; }
+.agent-advisor { font-size: 13.5px; }
+.agent-dim { color: var(--muted); font-size: 12px; }
+.agent-item.approval { border: 1px solid var(--border-strong); border-left: 3px solid var(--warn); border-radius: 4px; padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.agent-item.approval.pending { border-left-color: #0078d4; }
+.agent-approval-text { font-size: 14px; }
+.agent-q { color: var(--muted); }
+.agent-approval-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.agent-item.approval pre.agent-out { margin: 0; }
+.agent-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.agent-composer { max-width: 892px; }
+.agent-composer .btn.stop { background: #5a5d66; }
+
 .scrim { display: none; }
 
 @media (max-width: 1180px) and (min-width: 801px) {

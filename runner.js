@@ -63,7 +63,7 @@ export async function listLanguages({ fresh = false } = {}) {
 }
 
 // Programs get this server's environment minus anything that looks like a secret.
-function childEnv(dir) {
+export function childEnv(dir) {
   const env = {};
   for (const [k, v] of Object.entries(process.env)) {
     if (!/KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH/i.test(k)) env[k] = v;
@@ -74,7 +74,7 @@ function childEnv(dir) {
   return env;
 }
 
-function exec(argv, { cwd, env, stdin = '', timeoutMs, signal }) {
+export function exec(argv, { cwd, env, stdin = '', timeoutMs, signal }) {
   return new Promise((resolve) => {
     const started = performance.now();
     const out = { stdout: '', stderr: '', exitCode: null, signal: null, timedOut: false, truncated: false, durationMs: 0 };

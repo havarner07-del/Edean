@@ -157,23 +157,38 @@ export async function readFile(owner, repo, p, branch) {
   return { path: p, sha: meta.sha, size: meta.size, binary, content: binary ? '' : buf.toString('utf8') };
 }
 
-// One commit with any number of file changes: { path, content } writes, { path, delete: true } removes.
+// One commit with any number of file changes: { path, content } writes text, { path, base64 }
+// writes binary data, { path, delete: true } removes.
 export async function commit(owner, repo, branch, message, changes) {
   if (!message?.trim()) throw fail('Write a commit message.');
   if (!Array.isArray(changes) || !changes.length) throw fail('There are no changes to commit.');
   const rp = repoPath(owner, repo);
   const head = await gh('GET', `${rp}/git/ref/heads/${ref(branch)}`);
   const parent = await gh('GET', `${rp}/git/commits/${head.object.sha}`);
-  const entries = changes.map((c) => {
+  const entries = [];
+  for (const c of changes) {
     filePath(c.path);
-    if (c.delete) return { path: c.path, mode: '100644', type: 'blob', sha: null };
-    if (typeof c.content !== 'string') throw fail(`No content for ${c.path}.`);
-    return { path: c.path, mode: '100644', type: 'blob', content: c.content };
-  });
+    const mode = c.executable ? '100755' : '100644';
+    if (c.delete) entries.push({ path: c.path, mode, type: 'blob', sha: null });
+    else if (typeof c.base64 === 'string') {
+      const blob = await gh('POST', `${rp}/git/blobs`, { json: { content: c.base64, encoding: 'base64' } });
+      entries.push({ path: c.path, mode, type: 'blob', sha: blob.sha });
+    } else if (typeof c.content === 'string') entries.push({ path: c.path, mode, type: 'blob', content: c.content });
+    else throw fail(`No content for ${c.path}.`);
+  }
   const newTree = await gh('POST', `${rp}/git/trees`, { json: { base_tree: parent.tree.sha, tree: entries } });
   const created = await gh('POST', `${rp}/git/commits`, { json: { message: message.trim(), tree: newTree.sha, parents: [head.object.sha] } });
   await gh('PATCH', `${rp}/git/refs/heads/${ref(branch)}`, { json: { sha: created.sha } });
   return { sha: created.sha, url: created.html_url || '' };
+}
+
+export async function createRepo({ name, description = '', private: isPrivate = true }) {
+  if (!NAME.test(name || '') || name.startsWith('.')) throw fail(`"${name}" isn't a valid repository name (letters, numbers, - _ and . only).`);
+  const r = await gh('POST', '/user/repos', { json: { name, description: String(description).slice(0, 350), private: isPrivate !== false, auto_init: true } });
+  return {
+    owner: r.owner.login, name: r.name, fullName: r.full_name, private: r.private, description: r.description || '',
+    defaultBranch: r.default_branch || 'main', htmlUrl: r.html_url, canPush: true,
+  };
 }
 
 export async function commits(owner, repo, branch) {

@@ -59,6 +59,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
             Chat
           </button>
+          <button class="view-tab" type="button" role="tab" data-view="agent">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v4M9 12.5h.01M15 12.5h.01M9.5 16h5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+            Agent
+          </button>
           <button class="view-tab" type="button" role="tab" data-view="workspace">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5 M9.5 12.5 8 14l1.5 1.5M14.5 12.5 16 14l-1.5 1.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>
             Workspace
@@ -94,6 +98,24 @@
         <p class="fineprint">Runs on your own model. Always review generated code before running it.</p>
       </form>
       </div>
+
+      <section class="agent" id="agent-view" hidden>
+        <div class="agent-bar">
+          <select id="agent-project" aria-label="Project"></select>
+          <a class="btn ghost small" id="agent-open-gh" target="_blank" rel="noopener noreferrer" hidden>GitHub ↗</a>
+          <button class="btn ghost small" id="agent-open-ws" type="button">Open in Workspace</button>
+          <span class="toolbar-spacer"></span>
+          <label class="agent-auto" title="When on, the agent runs commands, creates repositories and pushes without asking you first"><input type="checkbox" id="agent-auto"> Work on its own</label>
+          <button class="btn ghost small" id="agent-new" type="button">New session</button>
+        </div>
+        <div class="agent-log" id="agent-log" aria-live="polite"></div>
+        <form class="composer agent-composer" id="agent-form">
+          <div class="composer-box">
+            <textarea id="agent-input" rows="2" placeholder="Tell Edean what to build or change…  (Enter to send)" aria-label="Instruction for the agent"></textarea>
+            <button class="btn" id="agent-send" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
 
       <section class="workspace" id="workspace" hidden>
         <nav class="ws-activity" id="ws-activity" aria-label="Workspace views"></nav>

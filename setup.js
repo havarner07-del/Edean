@@ -164,7 +164,9 @@ async function waitForEngine(config, seconds) {
 
 export function startOllama() {
   try {
-    const child = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true });
+    // The agent needs room for files and tool output; Ollama's default context is small.
+    const env = { ...process.env, OLLAMA_CONTEXT_LENGTH: process.env.OLLAMA_CONTEXT_LENGTH || '32768' };
+    const child = spawn('ollama', ['serve'], { detached: true, stdio: 'ignore', windowsHide: true, env });
     child.on('error', () => {});
     child.unref();
     return true;

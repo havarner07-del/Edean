@@ -9,6 +9,7 @@ Edean is a private chat app for your own coding AI. It works like Venice: you ge
 - **Works with any local model server** that has an OpenAI-compatible API, such as Ollama, LM Studio, llama.cpp or vLLM.
 - **Handles "thinking" models.** Output inside `<think>` tags and reasoning fields (Qwen3, DeepSeek-R1) is shown in a collapsible "Reasoning" section.
 - **Login screen.** A password protects the app. It starts as `0000`; change it in **Settings → Password**.
+- **Agent.** Tell it what you want built and it does the work itself: it creates or opens a GitHub repository, writes the files, runs them, fixes what breaks, commits and pushes, and opens pull requests. It asks before running commands or pushing, unless you let it work on its own.
 - **Workspace (VS Code-style).** Open your GitHub repositories and edit them in Monaco, the editor inside VS Code. You get an Explorer, tabs, Save / Save All, a diff view, Source Control (commit & push), branches, pull requests, dependencies, Run/Output, a command palette, a blue status bar, and an AI panel that proposes changes you can apply. Point it at Edean's own repository and it can improve itself through branches and pull requests.
 - **Advisors: Claude & Copilot.** When the local model is unsure, it asks Claude or GitHub Models one short question instead of guessing, then finishes its answer. This keeps paid usage to a few hundred tokens instead of whole conversations.
 - **Save chats to Google Drive.** Connect your Google account and pick a folder. Chats are then saved there as files instead of on your computer.
@@ -88,6 +89,34 @@ Edean opens on a login screen:
 - Sessions last 30 days. **Sign out** is in Settings.
 - Repeated wrong passwords are slowed down.
 - If Edean is reachable from your network while still using `0000`, the code runner, installer, GitHub access and advisors switch themselves off until you pick your own password.
+
+## Agent: tell it what to build
+
+Open the **Agent** tab and describe what you want, for example *"Create a Python app that tracks my expenses in a CSV, with tests, in a new private repo called expense-tracker"*. The agent then works like a developer at a terminal:
+
+1. It opens an existing repository or **creates a new one** on GitHub.
+2. It looks around (lists, reads and searches files), then **writes and edits files**.
+3. It **runs** the program or its tests, reads the output, and fixes problems until it works.
+4. It **commits and pushes**. On existing repositories it works on a new branch and **opens a pull request**.
+5. It finishes with a summary: what it did and how to run it.
+
+Every step shows up in the log. Click a step to see the file it wrote, the edit it made (in red and green), or the command output.
+
+You're in control:
+- **Approvals.** By default the agent asks before it **runs a command, creates a repository, pushes, or opens a pull request**. Choose **Allow**, **Allow all for this task**, or **Deny**. If you deny, it's told and works around it.
+- **Work on its own.** Tick this to let it do everything without asking.
+- **Stop** ends the current task at any time.
+- **New session** clears the conversation. The work stays in the project.
+
+More details:
+- **Where the work happens.** Each project is a folder in `~/.edean/projects/<owner>/<repo>`, downloaded from GitHub. Commits go back through the GitHub API, so git doesn't need to be installed.
+- **Without GitHub.** If GitHub isn't connected, the agent can still build a project in a local-only folder.
+- **Reviewing the work.** **Open in Workspace** shows the project in the VS Code-style editor.
+- **Getting help.** If an advisor is set up, the agent can ask Claude or Copilot a short question when it's stuck.
+
+**Which model?** The agent works best with models that support *tool calling*. `qwen2.5-coder` and `qwen3-coder` do, as do most recent coding models in Ollama. Models without tool calling still work through a simpler text format, but less reliably.
+
+The agent also needs more working memory than chat. When Edean starts Ollama itself, it sets `OLLAMA_CONTEXT_LENGTH=32768`. If you run Ollama yourself, set that variable too. Bigger models (14B–32B) plan and fix things much better than 7B ones.
 
 ## Workspace: your repositories, VS Code-style
 
@@ -244,6 +273,7 @@ toolchains.js       Detects Ollama and the compilers (runs them, so broken stubs
 auth.js             Login screen, sessions, password changes
 github.js           GitHub API for the Workspace (repos, branches, files, commits, PRs, dependencies)
 advisors.js         Claude (Anthropic SDK) and Copilot (GitHub Models) advisors
+agent.js            Coding agent: tools (repos, files, commands, commit/push, PRs), approvals, model loop
 drive.js            Google Drive chat storage (OAuth sign-in, folder, save/load/delete chats)
 setup.js            System check + one-click installer (winget / Homebrew / apt / dnf / pacman, model download)
 scripts/build-exe.mjs  Packs everything into one executable (Node single-executable app)
@@ -252,6 +282,7 @@ public/app.js       Chat view, settings, view switching
 public/compiler.js  Compiler tab: editor, Run, Advice and the Notepad
 public/systems.js   Systems check panel
 public/drive.js     Chat storage / Google Drive panel
+public/agent-ui.js  Agent tab: instructions, step log, approvals
 public/workspace.js VS Code-style Workspace (Monaco editor, explorer, source control, AI panel)
 public/lib.js       Shared helpers: markdown and code rendering, streaming, storage
 public/prompts.js   System prompt, modes, advice prompt, starter programs

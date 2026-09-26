@@ -1129,5 +1129,16 @@ Keep explanations short and put them before the code.`;
     else renderAll();
   }
 
-  return { show: start };
+  return {
+    show: start,
+    // Used by the Agent tab: show a repository (and branch) the agent worked on.
+    async openRepo(fullName, branch) {
+      store.set('edean.ws.repo', fullName);
+      store.set(`edean.ws.branch.${fullName}`, branch);
+      if (!started) return; // start() will open it
+      if (!S.gh?.connected) S.gh = await api('/api/github/status').catch(() => S.gh);
+      S.repos = null;
+      await openRepo(fullName, branch);
+    },
+  };
 }

@@ -13,6 +13,7 @@ import * as drive from './drive.js';
 import * as auth from './auth.js';
 import * as github from './github.js';
 import * as advisors from './advisors.js';
+import * as agent from './agent.js';
 
 // import.meta.url is undefined once bundled into the Edean executable.
 const HERE = typeof import.meta.url === 'string' ? fileURLToPath(import.meta.url) : '';
@@ -47,6 +48,7 @@ export const STATIC = {
   '/systems.js': ['public/systems.js', JS],
   '/drive.js': ['public/drive.js', JS],
   '/workspace.js': ['public/workspace.js', JS],
+  '/agent-ui.js': ['public/agent-ui.js', JS],
   '/styles.css': ['public/styles.css', CSS],
   '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
   // Libraries are served from node_modules so the browser never calls a CDN.
@@ -198,6 +200,43 @@ async function handleRun(req, res) {
     if (!abort.signal.aborted) sendJson(res, 200, result);
   } catch (err) {
     if (!abort.signal.aborted) sendJson(res, err.status || 500, { error: err.status ? err.message : 'Could not run the program' });
+  }
+}
+
+// The coding agent. Runs stream their progress as server-sent events.
+async function handleAgent(req, res, pathname) {
+  const blocked = setupBlockedReason() || runnerBlockedReason();
+  if (blocked) return sendJson(res, 403, { error: blocked.replace(/^(Installing is|The code runner is)/, 'The agent is') });
+  try {
+    if (pathname === '/api/agent/projects' && req.method === 'GET') return sendJson(res, 200, { projects: await agent.listProjects(), active: agent.activeRun() });
+    if (pathname === '/api/agent/changes' && req.method === 'GET') return sendJson(res, 200, { changes: await agent.projectChanges(new URL(req.url, 'http://x').searchParams.get('project')) });
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+    const body = JSON.parse((await readBody(req)) || '{}');
+    if (pathname === '/api/agent/stop') { agent.stopRun(body.run); return sendJson(res, 200, { ok: true }); }
+    if (pathname === '/api/agent/approve') return sendJson(res, agent.answerApproval(body.run, body.id, body.decision) ? 200 : 404, { ok: true });
+    if (pathname === '/api/agent/run') {
+      if (typeof body.task !== 'string' || !body.task.trim()) return sendJson(res, 400, { error: 'Tell the agent what to do.' });
+      if (agent.activeRun()) return sendJson(res, 409, { error: 'The agent is already working. Stop it first.' });
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+      let runId = null;
+      const send = (event) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify({ ...event, run: runId })}\n\n`); };
+      res.on('close', () => { if (!res.writableFinished) agent.stopRun(runId); });
+      const started = agent.runAgent(config, {
+        task: body.task.trim().slice(0, 20000),
+        history: Array.isArray(body.history) ? body.history : [],
+        project: typeof body.project === 'string' ? body.project : null,
+        model: typeof body.model === 'string' && body.model ? body.model : config.defaultModel,
+        autonomy: body.autonomy === 'auto' ? 'auto' : 'ask',
+      }, send);
+      runId = agent.activeRun()?.id || null;
+      send({ type: 'start' });
+      await started;
+      return res.end();
+    }
+    return sendJson(res, 404, { error: 'Not found' });
+  } catch (err) {
+    if (res.headersSent) return res.end();
+    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Agent error: ${err.message}` });
   }
 }
 
@@ -413,6 +452,7 @@ export function createServer() {
       if (pathname.startsWith('/api/setup/')) return await handleSetup(req, res, pathname);
       if (pathname.startsWith('/api/drive/')) return await handleDrive(req, res, pathname);
       if (pathname.startsWith('/api/github/')) return await handleGithub(req, res, pathname);
+      if (pathname.startsWith('/api/agent/')) return await handleAgent(req, res, pathname);
       if (pathname === '/api/advisors' || pathname.startsWith('/api/advisors/')) return await handleAdvisors(req, res, pathname);
       if (pathname === '/api/models' && req.method === 'GET') return await handleModels(res);
       if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);

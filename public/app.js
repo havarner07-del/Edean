@@ -7,6 +7,7 @@ import { initCompiler } from '/compiler.js';
 import { initSystems } from '/systems.js';
 import { initDrive, driveApi } from '/drive.js';
 import { initWorkspace } from '/workspace.js';
+import { initAgent } from '/agent-ui.js';
 
 // If the session expires, go back to the login screen.
 {
@@ -23,7 +24,7 @@ const els = {
   sidebar: $('sidebar'), scrim: $('scrim'), menuBtn: $('menu-btn'),
   newChat: $('new-chat'), search: $('search'), chatList: $('chat-list'),
   modelSelect: $('model-select'), statusDot: $('status-dot'), modes: $('modes'),
-  viewTabs: document.querySelectorAll('.view-tab'), chatView: $('chat-view'), compilerView: $('compiler'), workspaceView: $('workspace'),
+  viewTabs: document.querySelectorAll('.view-tab'), chatView: $('chat-view'), compilerView: $('compiler'), workspaceView: $('workspace'), agentView: $('agent-view'),
   messages: $('messages'), composer: $('composer'), input: $('input'), sendBtn: $('send-btn'),
   attachBtn: $('attach-btn'), fileInput: $('file-input'), attachments: $('attachments'),
   settings: $('settings'), openSettings: $('open-settings'), setSystem: $('set-system'),
@@ -161,17 +162,23 @@ const workspace = initWorkspace({
   getAdvisorStatus: () => advisorStatus,
   onOpenInCompiler: (code, lang) => compiler.open(code, lang),
 });
+const agentPanel = initAgent({
+  settings,
+  onOpenInWorkspace: (fullName, branch) => { workspace.openRepo(fullName, branch); setView('workspace'); },
+});
 // After installing things, refresh the model list and the compiler's languages.
 initSystems({ onChange: () => { loadModels(); compiler.refreshLanguages(); } });
 
 // ---------- views ----------
 function setView(view) {
-  settings.view = ['compiler', 'workspace'].includes(view) ? view : 'chat';
+  settings.view = ['compiler', 'workspace', 'agent'].includes(view) ? view : 'chat';
   saveSettings();
   const isChat = settings.view === 'chat';
   els.chatView.hidden = !isChat;
   els.compilerView.hidden = settings.view !== 'compiler';
   els.workspaceView.hidden = settings.view !== 'workspace';
+  els.agentView.hidden = settings.view !== 'agent';
+  if (settings.view === 'agent') agentPanel.show();
   document.body.classList.toggle('ws-mode', settings.view === 'workspace');
   els.modes.hidden = !isChat;
   if (settings.view === 'workspace') workspace.show();
