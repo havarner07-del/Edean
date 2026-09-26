@@ -1,0 +1,32 @@
+# One command to run Edean + a local model:  docker compose up -d
+# Then pull a coding model once:              docker compose exec ollama ollama pull qwen2.5-coder:7b
+services:
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+    # Uncomment to use an NVIDIA GPU (requires the NVIDIA Container Toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  edean:
+    build: .
+    depends_on:
+      - ollama
+    environment:
+      LLM_BASE_URL: http://ollama:11434/v1
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-qwen2.5-coder:7b}
+      APP_PASSWORD: ${APP_PASSWORD:-}
+    ports:
+      # Bound to localhost only. Change to "3000:3000" to expose on your network (set APP_PASSWORD first).
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+volumes:
+  ollama:

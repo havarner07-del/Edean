@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Edean</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/vendor/hl-dark.css" id="hl-dark">
+  <link rel="stylesheet" href="/vendor/hl-light.css" id="hl-light" disabled>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/vendor/highlight.min.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M11 9 4 16l7 7M21 9l7 7-7 7M18 6l-4 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Edean</span>
+      </div>
+      <button class="btn new-chat" id="new-chat" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        New chat
+      </button>
+      <input class="search" id="search" type="search" placeholder="Search chats" aria-label="Search chats">
+      <nav class="chat-list" id="chat-list" aria-label="Conversations"></nav>
+      <div class="sidebar-footer">
+        <div class="privacy" title="Conversations are stored only in this browser. The server keeps nothing.">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 10 4-1.6 7-5.5 7-10V6l-7-3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          Private · stored only on this device
+        </div>
+        <button class="btn ghost" id="open-settings" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          Settings
+        </button>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="icon-btn menu-btn" id="menu-btn" type="button" aria-label="Open sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <label class="model-picker">
+          <span class="status-dot" id="status-dot" title="Checking model backend…"></span>
+          <select id="model-select" aria-label="Model"></select>
+        </label>
+        <div class="modes" id="modes" role="radiogroup" aria-label="Mode"></div>
+      </header>
+
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <form class="composer" id="composer">
+        <div class="attachments" id="attachments"></div>
+        <div class="composer-box">
+          <button class="icon-btn" id="attach-btn" type="button" aria-label="Attach code files" title="Attach code files">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 11-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-2.8-2.8L15.5 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <input type="file" id="file-input" multiple hidden>
+          <textarea id="input" rows="1" placeholder="Ask Edean to write, fix or explain code…" title="Enter to send · Shift+Enter for a new line" aria-label="Message"></textarea>
+          <button class="send-btn" id="send-btn" type="submit" aria-label="Send">
+            <svg class="i-send" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <p class="fineprint">Runs on your own model. Always review generated code before running it.</p>
+      </form>
+    </main>
+  </div>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form" id="settings-form">
+      <h2>Settings</h2>
+      <label>System prompt
+        <textarea id="set-system" rows="10"></textarea>
+      </label>
+      <button class="btn ghost small" id="reset-system" type="button">Reset to default</button>
+      <div class="row">
+        <label>Temperature <output id="temp-out"></output>
+          <input id="set-temp" type="range" min="0" max="1.5" step="0.05">
+        </label>
+        <label>Max tokens
+          <input id="set-max" type="number" min="256" max="131072" step="256">
+        </label>
+      </div>
+      <label>Theme
+        <select id="set-theme">
+          <option value="system">System</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
+      <div class="row danger-zone">
+        <button class="btn ghost small" id="export-chats" type="button">Export all chats</button>
+        <button class="btn danger small" id="delete-all" type="button">Delete all chats</button>
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" value="save">Done</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
