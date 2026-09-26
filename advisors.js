@@ -65,7 +65,7 @@ export async function updateAdvisors(input = {}) {
   return advisorStatus();
 }
 
-async function askClaude(question) {
+async function askClaude(question, system = ADVISOR_SYSTEM) {
   const key = anthropicKey();
   if (!key) throw fail('Add your Anthropic API key in Settings → Advisors to ask Claude.', 409);
   const model = settings.claudeModel || DEFAULTS.claudeModel;
@@ -73,7 +73,7 @@ async function askClaude(question) {
   const params = {
     model,
     max_tokens: 16000,
-    system: ADVISOR_SYSTEM,
+    system,
     messages: [{ role: 'user', content: question }],
   };
   if (!/haiku/.test(model)) {
@@ -106,14 +106,14 @@ async function askClaude(question) {
   };
 }
 
-async function askCopilot(question) {
+async function askCopilot(question, system = ADVISOR_SYSTEM) {
   const token = await githubToken();
   if (!token) throw fail('Connect GitHub in the Workspace to ask Copilot (GitHub Models).', 409);
   const model = settings.copilotModel || DEFAULTS.copilotModel;
   const r = await fetch(GITHUB_MODELS_URL(), {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'X-GitHub-Api-Version': '2022-11-28' },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: ADVISOR_SYSTEM }, { role: 'user', content: question }] }),
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: system }, { role: 'user', content: question }] }),
     signal: AbortSignal.timeout(120000),
   });
   const data = await r.json().catch(() => ({}));
@@ -139,6 +139,46 @@ export async function ask({ advisor, question }) {
   if (advisor === 'claude') return askClaude(question);
   if (advisor === 'copilot') return askCopilot(question);
   throw fail('Unknown advisor.');
+}
+
+// ---------- planning and review for the agent ----------
+const PLAN_SYSTEM = `You are a senior software engineer planning work for a smaller coding agent. The agent does the actual work with tools: it can list, read and search files, write and edit files, run shell commands, and commit/push. It is capable but less experienced, so your plan must be concrete enough to follow without guessing.
+
+Write the plan in Markdown with these sections:
+## Approach
+2-4 sentences: how to accomplish the goal and the key decisions (structure, libraries, algorithms). Prefer the simplest approach that fully works, and match the project's existing style and tools.
+## Steps
+Numbered. Each step names the exact file to create or change and what goes in it: functions/classes with their signatures, the key logic, data formats, and how pieces connect. Include a short code snippet only where the agent would likely get it wrong. Put "read these files first" as step 1 when existing code matters.
+## Verify
+The exact commands to run and what a successful result looks like.
+## Watch out for
+Specific pitfalls for this task.
+
+Do not write the whole implementation; the agent writes the code. Be precise and brief (usually under 600 words). If the goal is ambiguous, pick the most reasonable interpretation and say which.`;
+
+const REVIEW_SYSTEM = `You review changes a coding agent made for a user. Check that the changes fully accomplish the user's goal and follow the plan, that the code is correct (logic, edge cases, error handling, security), and that nothing obvious is missing (imports, wiring, tests, docs the plan asked for).
+If everything is right, reply with exactly "LGTM" on the first line, optionally followed by one sentence.
+Otherwise reply with a short numbered list of concrete problems, each saying which file, what is wrong and how to fix it. Don't list style nitpicks.`;
+
+// Which advisor does the planning/review: Claude if set up, otherwise Copilot.
+export async function plannerAvailable() {
+  const st = await advisorStatus();
+  return st.claude.configured ? 'claude' : st.copilot.configured ? 'copilot' : null;
+}
+
+async function consult(system, prompt) {
+  await load();
+  const who = await plannerAvailable();
+  if (!who) throw fail('No advisor is set up. Add an Anthropic API key or connect GitHub in Settings → Advisors.', 409);
+  return who === 'claude' ? askClaude(prompt, system) : askCopilot(prompt, system);
+}
+
+export async function plan({ task, context }) {
+  return consult(PLAN_SYSTEM, `# Goal from the user\n${task}\n\n# Project context\n${context}`);
+}
+
+export async function review({ task, planText, diff }) {
+  return consult(REVIEW_SYSTEM, `# The user's goal\n${task}\n\n${planText ? `# The plan the agent followed\n${planText}\n\n` : ''}# Changes the agent made\n${diff}`);
 }
 
 export function _reset() { settings = null; }

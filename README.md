@@ -9,7 +9,7 @@ Edean is a private chat app for your own coding AI. It works like Venice: you ge
 - **Works with any local model server** that has an OpenAI-compatible API, such as Ollama, LM Studio, llama.cpp or vLLM.
 - **Handles "thinking" models.** Output inside `<think>` tags and reasoning fields (Qwen3, DeepSeek-R1) is shown in a collapsible "Reasoning" section.
 - **Login screen.** A password protects the app. It starts as `0000`; change it in **Settings → Password**.
-- **Agent.** Tell it what you want built and it does the work itself: it creates or opens a GitHub repository, writes the files, runs them, fixes what breaks, commits and pushes, and opens pull requests. It asks before running commands or pushing, unless you let it work on its own.
+- **Agent.** Tell it what you want and it does the work itself. It first asks **Claude how to do it**, then follows that plan: it opens **your own code in a folder on your computer** (or a GitHub repository, or creates a new one), writes and edits the files, runs them, fixes what breaks, and commits. Claude can also **review the finished changes**, and every task can be **undone** with one click. It asks before running commands or pushing, unless you let it work on its own.
 - **Workspace (VS Code-style).** Open your GitHub repositories and edit them in Monaco, the editor inside VS Code. You get an Explorer, tabs, Save / Save All, a diff view, Source Control (commit & push), branches, pull requests, dependencies, Run/Output, a command palette, a blue status bar, and an AI panel that proposes changes you can apply. Point it at Edean's own repository and it can improve itself through branches and pull requests.
 - **Advisors: Claude & Copilot.** When the local model is unsure, it asks Claude or GitHub Models one short question instead of guessing, then finishes its answer. This keeps paid usage to a few hundred tokens instead of whole conversations.
 - **Save chats to Google Drive.** Connect your Google account and pick a folder. Chats are then saved there as files instead of on your computer.
@@ -106,11 +106,30 @@ Edean opens on a login screen:
 
 Open the **Agent** tab and describe what you want, for example *"Create a Python app that tracks my expenses in a CSV, with tests, in a new private repo called expense-tracker"*. The agent then works like a developer at a terminal:
 
-1. It opens an existing repository or **creates a new one** on GitHub.
-2. It looks around (lists, reads and searches files), then **writes and edits files**.
-3. It **runs** the program or its tests, reads the output, and fixes problems until it works.
-4. It **commits and pushes**. On existing repositories it works on a new branch and **opens a pull request**.
-5. It finishes with a summary: what it did and how to run it.
+1. It **asks Claude how to do the job** (see *Plan with Claude* below) and follows that plan.
+2. It opens **a folder on your computer**, an existing repository, or **creates a new one** on GitHub.
+3. It looks around (lists, reads and searches files), then **writes and edits files**.
+4. It **runs** the program or its tests, reads the output, and fixes problems until it works.
+5. If **Claude reviews** is on, Claude checks the changes and the agent fixes anything Claude finds.
+6. It **commits and pushes**. On existing repositories it works on a new branch and **opens a pull request**. In a folder on your computer it only commits when you ask.
+7. It finishes with a summary: what it did and how to run it.
+
+### Working on your own code
+
+Click **Open folder…** in the Agent bar and pick the folder of your project (for example `C:\Users\you\code\my-app`), or just tell the agent *"open C:\Users\you\code\my-app and …"*. The agent then reads and edits the files **directly in that folder**:
+- If the folder is a git repository, it can create a branch, commit with your own git (and your name), push if the folder has a remote, and open a pull request if that remote is on GitHub.
+- If it isn't a git repository, the files are simply changed in place.
+- **Undo.** Before the agent first changes a file in a task, Edean saves a copy in `~/.edean/backups`. When the task finishes, **Undo these changes** puts every file it wrote, edited or deleted back the way it was (the last 20 tasks are kept). Changes made by commands it ran, such as installed packages, aren't undone.
+- **Show folder** opens the folder in Explorer / Finder.
+- For safety it won't open a whole drive, your whole home folder, system folders, or Edean's own data folder.
+
+### Plan with Claude
+
+With **Plan with Claude** ticked (the default), the agent doesn't start by guessing. It first sends Claude your instruction plus a compact picture of the project (the file list, the README and manifest files, and files your instruction mentions), and asks **how** to do it. Claude answers with an approach, the exact steps (which files to create or change and what goes in them), how to verify it, and pitfalls. The plan appears as **Claude's plan** in the log, and the local model then writes all the code itself, following it step by step.
+
+With **Claude reviews** ticked, when the agent thinks it's finished, Claude gets the diff of its changes. If Claude replies that it looks good, you're done; otherwise the agent gets Claude's list of problems and fixes them before its final summary.
+
+This way Claude does the thinking once, in a few thousand tokens, and your free local model does the long work of writing, running and fixing. Planning uses Claude when an Anthropic API key is set, otherwise Copilot (GitHub Models); without either, the agent simply works without a plan. Untick the boxes to skip either step.
 
 Every step shows up in the log. Click a step to see the file it wrote, the edit it made (in red and green), or the command output.
 
@@ -121,7 +140,7 @@ You're in control:
 - **New session** clears the conversation. The work stays in the project.
 
 More details:
-- **Where the work happens.** Each project is a folder in `~/.edean/projects/<owner>/<repo>`, downloaded from GitHub. Commits go back through the GitHub API, so git doesn't need to be installed.
+- **Where the work happens.** A GitHub project is a folder in `~/.edean/projects/<owner>/<repo>`, downloaded from GitHub. Its commits go back through the GitHub API, so git doesn't need to be installed. A folder you opened is edited in place.
 - **Without GitHub.** If GitHub isn't connected, the agent can still build a project in a local-only folder.
 - **Reviewing the work.** **Open in Workspace** shows the project in the VS Code-style editor.
 - **Getting help.** If an advisor is set up, the agent can ask Claude or Copilot a short question when it's stuck.
@@ -286,7 +305,7 @@ auth.js             Login screen, sessions, password changes
 github.js           GitHub API for the Workspace (repos, branches, files, commits, PRs, dependencies)
 advisors.js         Claude (Anthropic SDK) and Copilot (GitHub Models) advisors
 updater.js          In-app updates (release download + swap + restart, or git pull)
-agent.js            Coding agent: tools (repos, files, commands, commit/push, PRs), approvals, model loop
+agent.js            Coding agent: plan with Claude, tools (repos, folders, files, commands, commit/push, PRs), approvals, review, undo
 drive.js            Google Drive chat storage (OAuth sign-in, folder, save/load/delete chats)
 setup.js            System check + one-click installer (winget / Homebrew / apt / dnf / pacman, model download)
 scripts/build-exe.mjs  Packs everything into one executable (Node single-executable app)
@@ -295,7 +314,7 @@ public/app.js       Chat view, settings, view switching
 public/compiler.js  Compiler tab: editor, Run, Advice and the Notepad
 public/systems.js   Systems check panel
 public/drive.js     Chat storage / Google Drive panel
-public/agent-ui.js  Agent tab: instructions, step log, approvals
+public/agent-ui.js  Agent tab: instructions, step log, approvals, plans and reviews, folder picker, undo
 public/workspace.js VS Code-style Workspace (Monaco editor, explorer, source control, AI panel)
 public/lib.js       Shared helpers: markdown and code rendering, streaming, storage
 public/prompts.js   System prompt, modes, advice prompt, starter programs

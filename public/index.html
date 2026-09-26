@@ -103,9 +103,13 @@
       <section class="agent" id="agent-view" hidden>
         <div class="agent-bar">
           <select id="agent-project" aria-label="Project"></select>
+          <button class="btn ghost small" id="agent-folder" type="button" title="Let the agent work directly on code in a folder on this computer">Open folder…</button>
           <a class="btn ghost small" id="agent-open-gh" target="_blank" rel="noopener noreferrer" hidden>GitHub ↗</a>
           <button class="btn ghost small" id="agent-open-ws" type="button">Open in Workspace</button>
+          <button class="btn ghost small" id="agent-reveal" type="button" hidden>Show folder</button>
           <span class="toolbar-spacer"></span>
+          <label class="agent-auto" title="Before writing code, the agent asks Claude (or Copilot) exactly how to do the job, then follows that plan"><input type="checkbox" id="agent-plan"> Plan with Claude</label>
+          <label class="agent-auto" title="When the agent finishes, Claude checks its changes and the agent fixes anything Claude finds"><input type="checkbox" id="agent-review"> Claude reviews</label>
           <label class="agent-auto" title="When on, the agent runs commands, creates repositories and pushes without asking you first"><input type="checkbox" id="agent-auto"> Work on its own</label>
           <button class="btn ghost small" id="agent-new" type="button">New session</button>
         </div>
@@ -286,6 +290,29 @@
         </button>
       </header>
       <div class="drive-body" id="drive-body"></div>
+    </div>
+  </dialog>
+
+  <dialog id="folder-picker" class="drive-dialog" aria-labelledby="folder-title">
+    <div class="drive-panel">
+      <header class="systems-head">
+        <svg class="drive-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h5l2 2h8A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <div><h2 id="folder-title">Open a folder on this computer</h2><p class="drive-sub">The agent reads and edits the code in this folder directly. Every change can be undone.</p></div>
+        <button class="icon-btn" id="close-folder" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <form class="drive-row" id="folder-path-form">
+        <input id="folder-path" type="text" spellcheck="false" autocomplete="off" aria-label="Folder path" placeholder="C:\Users\you\code\my-app">
+        <button class="btn ghost small" type="submit">Go</button>
+      </form>
+      <div class="folder-shortcuts" id="folder-shortcuts"></div>
+      <div class="drive-folders folder-list" id="folder-list"></div>
+      <p class="update-msg err" id="folder-msg"></p>
+      <div class="drive-actions">
+        <button class="btn ghost" id="folder-cancel" type="button">Cancel</button>
+        <button class="btn" id="folder-open" type="button">Open this folder</button>
+      </div>
     </div>
   </dialog>
 

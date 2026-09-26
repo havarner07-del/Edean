@@ -3,6 +3,7 @@
 // Nothing is logged or stored here — conversations live only in the browser.
 
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -223,6 +224,16 @@ async function handleUpdate(req, res, pathname) {
   }
 }
 
+// Shows a folder in Explorer / Finder / the file manager.
+function revealFolder(dir) {
+  const [cmd, args] = process.platform === 'win32' ? ['explorer.exe', [dir]] : process.platform === 'darwin' ? ['open', [dir]] : ['xdg-open', [dir]];
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: false });
+    child.on('error', () => {});
+    child.unref();
+  } catch { /* no file manager */ }
+}
+
 // The coding agent. Runs stream their progress as server-sent events.
 async function handleAgent(req, res, pathname) {
   const blocked = setupBlockedReason() || runnerBlockedReason();
@@ -230,9 +241,13 @@ async function handleAgent(req, res, pathname) {
   try {
     if (pathname === '/api/agent/projects' && req.method === 'GET') return sendJson(res, 200, { projects: await agent.listProjects(), active: agent.activeRun() });
     if (pathname === '/api/agent/changes' && req.method === 'GET') return sendJson(res, 200, { changes: await agent.projectChanges(new URL(req.url, 'http://x').searchParams.get('project')) });
+    if (pathname === '/api/agent/browse' && req.method === 'GET') return sendJson(res, 200, await agent.browse(new URL(req.url, 'http://x').searchParams.get('path') || ''));
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
     const body = JSON.parse((await readBody(req)) || '{}');
     if (pathname === '/api/agent/stop') { agent.stopRun(body.run); return sendJson(res, 200, { ok: true }); }
+    if (pathname === '/api/agent/open-folder') return sendJson(res, 200, { project: await agent.projectInfoFor((await agent.openFolder(body.path)).id) });
+    if (pathname === '/api/agent/undo') return sendJson(res, 200, await agent.undoRun(body.run));
+    if (pathname === '/api/agent/reveal') { revealFolder((await agent.projectInfoFor(body.project)).dir); return sendJson(res, 200, { ok: true }); }
     if (pathname === '/api/agent/approve') return sendJson(res, agent.answerApproval(body.run, body.id, body.decision) ? 200 : 404, { ok: true });
     if (pathname === '/api/agent/run') {
       if (typeof body.task !== 'string' || !body.task.trim()) return sendJson(res, 400, { error: 'Tell the agent what to do.' });
@@ -247,6 +262,8 @@ async function handleAgent(req, res, pathname) {
         project: typeof body.project === 'string' ? body.project : null,
         model: typeof body.model === 'string' && body.model ? body.model : config.defaultModel,
         autonomy: body.autonomy === 'auto' ? 'auto' : 'ask',
+        plan: body.plan !== false,
+        review: body.review === true,
       }, send);
       runId = agent.activeRun()?.id || null;
       send({ type: 'start' });
