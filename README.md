@@ -32,6 +32,18 @@ A few things to know:
 - **Settings:** put an `edean.env` file next to `Edean.exe` (start from `edean.env.example`).
 - **Problems:** check `%USERPROFILE%\.edean\edean.log`. Startup errors are also shown in a message box.
 
+**Updating:** open **Settings → Updates** and click **Check for updates**. Edean also checks quietly when it starts, and shows a green dot on Settings when there's something new.
+
+Click **Update now** and Edean:
+1. downloads the newest build for your computer from the repository's "Edean (latest build)" release,
+2. verifies it (size and SHA-256 checksum),
+3. swaps it in for the running program and restarts,
+4. reloads your window into the new version. You stay signed in.
+
+If the repository is **private**, connect GitHub in the Workspace first (the token needs *Contents: read*), so Edean can see the releases.
+
+When running from source, the same button runs `git pull` (and `npm install` if dependencies changed) and restarts. In Docker, use `docker compose pull && docker compose up -d --build`.
+
 **Build it yourself** (needs Node.js 22+): `npm install`, then either
 - `npm run build:exe` for your own computer, or
 - `npm run build:exe:win` to build `dist/Edean.exe` from any OS. This downloads the official Node.js for Windows and verifies it against its checksum.
@@ -273,6 +285,7 @@ toolchains.js       Detects Ollama and the compilers (runs them, so broken stubs
 auth.js             Login screen, sessions, password changes
 github.js           GitHub API for the Workspace (repos, branches, files, commits, PRs, dependencies)
 advisors.js         Claude (Anthropic SDK) and Copilot (GitHub Models) advisors
+updater.js          In-app updates (release download + swap + restart, or git pull)
 agent.js            Coding agent: tools (repos, files, commands, commit/push, PRs), approvals, model loop
 drive.js            Google Drive chat storage (OAuth sign-in, folder, save/load/delete chats)
 setup.js            System check + one-click installer (winget / Homebrew / apt / dnf / pacman, model download)

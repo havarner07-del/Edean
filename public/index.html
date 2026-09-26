@@ -42,6 +42,7 @@
           <span class="systems-btn-text">System check <small id="systems-summary">Checking…</small></span>
         </button>
         <button class="btn ghost" id="open-settings" type="button">
+          <span class="update-dot" id="update-dot" hidden title="An update is available"></span>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
           Settings
         </button>
@@ -313,6 +314,16 @@
       <div class="row">
         <button class="btn ghost small" id="open-drive" type="button">Chat storage: Google Drive…</button>
       </div>
+      <fieldset class="account" id="updates">
+        <legend>Updates</legend>
+        <p class="drive-sub" id="update-current">Checking version…</p>
+        <p class="update-msg" id="update-msg" role="status"></p>
+        <div class="update-bar" id="update-bar" hidden><div id="update-fill"></div></div>
+        <div class="row">
+          <button class="btn ghost small" id="update-check" type="button">Check for updates</button>
+          <button class="btn small" id="update-apply" type="button" hidden>Update now</button>
+        </div>
+      </fieldset>
       <fieldset class="account">
         <legend>Advisors: Claude &amp; Copilot</legend>
         <p class="drive-sub">When the local model isn't sure, it can ask Claude or Copilot one short question instead of guessing, which keeps paid usage low.

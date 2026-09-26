@@ -148,12 +148,16 @@ async function main() {
   const { config, startServer, desktop } = await import('./server.js');
   const { detectTools } = await import('./toolchains.js');
   const { startOllama } = await import('./setup.js');
+  const updater = await import('./updater.js');
+  const restarted = process.env.EDEAN_RESTARTED === '1';
+  delete process.env.EDEAN_RESTARTED; // don't pass it on to programs Edean runs
+  updater.cleanupOld().catch(() => {});
 
   log(`Starting Edean${PACKAGED ? ' (desktop app)' : ''}${envFile ? ` with settings from ${envFile}` : ''}`);
 
   // If Edean is already running, just open another window onto it.
   const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host;
-  for (let port = config.port; port < config.port + 20; port++) {
+  for (let port = config.port; port < config.port + 20 && !restarted; port++) {
     if (await isEdean(`http://${host}:${port}`)) {
       log(`Edean is already running on port ${port}; opening a window.`);
       const child = openWindow(`http://${host}:${port}`);
@@ -174,7 +178,16 @@ async function main() {
   }
 
   let server;
-  for (let port = config.port; port < config.port + 20; port++) {
+  // After an update the open window reloads from the same address, so wait for the old
+  // version to let go of its port instead of moving to another one.
+  const wantedPort = restarted && process.env.EDEAN_PORT ? Number(process.env.EDEAN_PORT) : config.port;
+  for (let tries = 0; restarted && !server && tries < 40; tries++) {
+    try { server = await startServer({ port: wantedPort, host: config.host }); } catch (err) {
+      if (err.code !== 'EADDRINUSE') throw err;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  for (let port = config.port; !server && port < config.port + 20; port++) {
     try {
       server = await startServer({ port, host: config.host });
       break;
@@ -193,8 +206,23 @@ async function main() {
   };
   desktop.enabled = true;
   desktop.quit = () => quit('Quit from the app');
+  // After an update: start the new version (it takes over this port and the open window reloads).
+  desktop.restart = (newExecutable) => {
+    log(`Restarting into the updated version${newExecutable ? ` (${newExecutable})` : ''}`);
+    const [cmd, args] = newExecutable ? [newExecutable, []] : [process.execPath, process.argv.slice(1)];
+    const env = { ...process.env, EDEAN_RESTARTED: '1', EDEAN_PORT: String(server.address().port) };
+    server.close();
+    server.closeAllConnections?.();
+    try {
+      spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: false, env, cwd: APP_DIR }).unref();
+    } catch (err) {
+      showError(`The update was installed, but Edean couldn't restart itself: ${err.message}. Start it again.`);
+    }
+    setTimeout(() => process.exit(0), 500).unref();
+  };
 
-  const window = openWindow(url);
+  // A restart after an update reuses the window that's already open.
+  const window = restarted ? null : openWindow(url);
   let tracking = false;
   if (window) {
     const openedAt = Date.now();

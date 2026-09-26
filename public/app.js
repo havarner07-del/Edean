@@ -576,6 +576,7 @@ els.scrim.onclick = closeSidebar;
 
 els.openSettings.onclick = () => {
   refreshAccount();
+  showVersion();
   loadAdvisors().then(fillAdvisorSettings);
   els.setSystem.value = settings.systemPrompt;
   els.setTemp.value = settings.temperature;
@@ -647,6 +648,92 @@ $('adv-save').onclick = async () => {
   $('adv-status').className = 'pw-status ok';
   renderMessages();
 };
+// ---------- updates ----------
+const shortSha = (sha) => (/^[0-9a-f]{7,}$/.test(sha || '') ? sha.slice(0, 7) : sha || 'unknown');
+const when = (iso) => (iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '');
+function updateMsg(text, kind = '') { $('update-msg').textContent = text; $('update-msg').className = `update-msg ${kind}`; }
+
+async function showVersion() {
+  try {
+    const st = await (await fetch('/api/update/status')).json();
+    const c = st.current;
+    $('update-current').textContent = c.mode === 'app' ? `Edean ${shortSha(c.sha)}${c.builtAt ? `, built ${when(c.builtAt)}` : ''} · updates from ${st.repo}`
+      : c.mode === 'source' ? `Running from source: ${shortSha(c.sha)} on ${c.branch || 'unknown branch'} · updates with git pull`
+        : c.mode === 'docker' ? 'Running in Docker: update with docker compose pull && docker compose up -d --build'
+          : `Version ${shortSha(c.sha)}`;
+    return st;
+  } catch { return null; }
+}
+
+async function checkForUpdates({ quiet = false } = {}) {
+  if (!quiet) updateMsg('Checking…');
+  try {
+    const r = await fetch('/api/update/check', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Could not check for updates.');
+    $('update-apply').hidden = !data.available;
+    $('update-dot').hidden = !data.available;
+    if (data.available) {
+      const l = data.latest;
+      updateMsg(l.behind ? `${l.behind} new change${l.behind > 1 ? 's' : ''} available: ${l.notes}` : `A new version is available (${shortSha(l.sha)}, ${when(l.publishedAt)}).`, 'ok');
+    } else if (!quiet) updateMsg(data.note || 'Edean is up to date.', data.note ? '' : 'ok');
+    return data;
+  } catch (e) {
+    if (!quiet) updateMsg(e.message, 'err');
+    return null;
+  }
+}
+
+async function applyUpdate() {
+  if (!confirm('Download and install the update now? Edean restarts when it\'s done; unsaved work in open editors is kept in this browser.')) return;
+  await syncToDrive();
+  $('update-apply').disabled = true;
+  $('update-check').disabled = true;
+  $('update-bar').hidden = false;
+  updateMsg('Starting the update…');
+  const before = (await (await fetch('/api/update/status')).json()).current.sha;
+  const poll = setInterval(async () => {
+    try {
+      const st = await (await fetch('/api/update/status')).json();
+      $('update-fill').style.width = `${st.progress}%`;
+      if (st.phase === 'downloading') updateMsg(`Downloading… ${st.progress}%`);
+      else if (st.phase === 'installing') updateMsg('Installing…');
+    } catch { /* restarting */ }
+  }, 500);
+  try {
+    const r = await fetch('/api/update/apply', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'The update failed.');
+    clearInterval(poll);
+    $('update-fill').style.width = '100%';
+    if (!data.canRestart) { updateMsg('Updated. Restart Edean to finish.', 'ok'); return; }
+    updateMsg('Restarting Edean…');
+    // Wait for the new version to come up, then reload into it.
+    for (let i = 0; i < 120; i++) {
+      await new Promise((res) => setTimeout(res, 1000));
+      try {
+        const h = await (await fetch('/api/health', { cache: 'no-store' })).json();
+        if (h.version && h.version !== before) { location.reload(); return; }
+      } catch { /* not up yet */ }
+    }
+    updateMsg('The update was installed. If Edean did not come back, start it again.', 'err');
+  } catch (e) {
+    clearInterval(poll);
+    updateMsg(e.message, 'err');
+    $('update-apply').disabled = false;
+    $('update-check').disabled = false;
+    $('update-bar').hidden = true;
+  }
+}
+
+$('update-check').onclick = () => checkForUpdates();
+$('update-apply').onclick = applyUpdate;
+// Check quietly once shortly after starting; a dot on Settings shows when there's an update.
+setTimeout(async () => {
+  const st = await showVersion();
+  if (st && st.current.mode !== 'docker' && st.current.mode !== 'unknown') checkForUpdates({ quiet: true });
+}, 4000);
+
 // Desktop app: tell Edean.exe this window is still open, and offer "Quit Edean".
 async function ping() {
   try {

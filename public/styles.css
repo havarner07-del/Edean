@@ -736,6 +736,14 @@ pre.agent-out, pre.agent-diff { padding: 8px 10px; border-radius: 4px; backgroun
 .agent-composer { max-width: 892px; }
 .agent-composer .btn.stop { background: #5a5d66; }
 
+/* Updates */
+#open-settings { position: relative; }
+.update-dot { position: absolute; left: 22px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: #3fb950; }
+.update-msg { margin: 0; font-size: 13px; min-height: 1em; }
+.update-msg.ok { color: var(--ok); } .update-msg.err { color: var(--danger); }
+.update-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.update-bar > div { height: 100%; width: 0; background: #0078d4; transition: width .3s; }
+
 .scrim { display: none; }
 
 @media (max-width: 1180px) and (min-width: 801px) {

@@ -14,6 +14,7 @@ import * as auth from './auth.js';
 import * as github from './github.js';
 import * as advisors from './advisors.js';
 import * as agent from './agent.js';
+import * as updater from './updater.js';
 
 // import.meta.url is undefined once bundled into the Edean executable.
 const HERE = typeof import.meta.url === 'string' ? fileURLToPath(import.meta.url) : '';
@@ -37,7 +38,7 @@ const JS = 'text/javascript; charset=utf-8';
 const CSS = 'text/css; charset=utf-8';
 // Set by the desktop launcher (Edean.exe): lets the app offer "Quit Edean" and lets
 // the launcher notice when no window has been open for a while.
-export const desktop = { enabled: false, quit: null, lastActivity: Date.now() };
+export const desktop = { enabled: false, quit: null, restart: null, lastActivity: Date.now() };
 
 export const STATIC = {
   '/': ['public/index.html', 'text/html; charset=utf-8'],
@@ -200,6 +201,25 @@ async function handleRun(req, res) {
     if (!abort.signal.aborted) sendJson(res, 200, result);
   } catch (err) {
     if (!abort.signal.aborted) sendJson(res, err.status || 500, { error: err.status ? err.message : 'Could not run the program' });
+  }
+}
+
+// Updates: check the Edean repository for a newer build, download it and restart.
+async function handleUpdate(req, res, pathname) {
+  try {
+    if (pathname === '/api/update/status' && req.method === 'GET') {
+      return sendJson(res, 200, { current: await updater.currentVersion(), repo: updater.updateRepo(), canRestart: !!desktop.restart, ...updater.status() });
+    }
+    const blocked = setupBlockedReason();
+    if (blocked) return sendJson(res, 403, { error: blocked.replace('Installing is', 'Updating is') });
+    if (pathname === '/api/update/check' && req.method === 'POST') return sendJson(res, 200, await updater.check());
+    if (pathname === '/api/update/apply' && req.method === 'POST') {
+      const result = await updater.apply({ restart: desktop.restart });
+      return sendJson(res, 200, { ...result, canRestart: !!desktop.restart });
+    }
+    return sendJson(res, 404, { error: 'Not found' });
+  } catch (err) {
+    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Update failed: ${err.message}` });
   }
 }
 
@@ -421,7 +441,7 @@ export function createServer() {
     const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
       // Public: health check, the login page and its icon.
-      if (pathname === '/api/health') return sendJson(res, 200, { ok: true, app: 'edean' });
+      if (pathname === '/api/health') return sendJson(res, 200, { ok: true, app: 'edean', version: (await updater.currentVersion()).sha });
       if (pathname === '/favicon.svg') return serveStatic(req, res, pathname);
       if (pathname === '/login') { desktop.lastActivity = Date.now(); return await handleLogin(req, res, searchParams); }
       if (!auth.isAuthenticated(req)) {
@@ -453,6 +473,7 @@ export function createServer() {
       if (pathname.startsWith('/api/drive/')) return await handleDrive(req, res, pathname);
       if (pathname.startsWith('/api/github/')) return await handleGithub(req, res, pathname);
       if (pathname.startsWith('/api/agent/')) return await handleAgent(req, res, pathname);
+      if (pathname.startsWith('/api/update/')) return await handleUpdate(req, res, pathname);
       if (pathname === '/api/advisors' || pathname.startsWith('/api/advisors/')) return await handleAdvisors(req, res, pathname);
       if (pathname === '/api/models' && req.method === 'GET') return await handleModels(res);
       if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);

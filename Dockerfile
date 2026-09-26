@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY server.js runner.js toolchains.js setup.js drive.js auth.js github.js advisors.js agent.js launcher.js ./
+COPY server.js runner.js toolchains.js setup.js drive.js auth.js github.js advisors.js agent.js updater.js launcher.js ./
 COPY public ./public
 ENV HOST=0.0.0.0 PORT=3000 NODE_ENV=production
 EXPOSE 3000

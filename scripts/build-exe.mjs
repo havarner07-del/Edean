@@ -33,6 +33,19 @@ const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit', cwd: ROOT
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
 
+function buildInfo() {
+  let sha = process.env.GITHUB_SHA || '';
+  if (!sha) { try { sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(); } catch { sha = 'dev'; } }
+  let repo = process.env.GITHUB_REPOSITORY || '';
+  if (!repo) {
+    try {
+      const url = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: ROOT, encoding: 'utf8' }).trim();
+      repo = (url.match(/github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?$/) || [])[1] || (url.match(/\/git\/([^/]+\/[^/.]+?)(?:\.git)?$/) || [])[1] || '';
+    } catch { /* no git */ }
+  }
+  return { sha, builtAt: new Date().toISOString(), repo: repo || 'havarner07-del/Edean' };
+}
+
 // 1. Bundle the launcher + server into one CommonJS file.
 console.log(`• Bundling for ${target}…`);
 await build({
@@ -44,6 +57,8 @@ await build({
   outfile: path.join(DIST, 'edean.cjs'),
   logLevel: 'warning',
   logOverride: { 'empty-import-meta': 'silent' },
+  // Lets the in-app updater know which build this is.
+  define: { __EDEAN_BUILD__: JSON.stringify(buildInfo()) },
 });
 
 // 2. Embed the web app, libraries and the Monaco editor as assets.
