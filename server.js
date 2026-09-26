@@ -40,16 +40,12 @@ export const STATIC = {
   '/systems.js': ['public/systems.js', JS],
   '/styles.css': ['public/styles.css', CSS],
   '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
-  // Libraries and fonts are served from node_modules so the browser never calls a CDN.
+  // Libraries are served from node_modules so the browser never calls a CDN.
   '/vendor/marked.esm.js': ['node_modules/marked/lib/marked.esm.js', JS],
   '/vendor/purify.es.mjs': ['node_modules/dompurify/dist/purify.es.mjs', JS],
   '/vendor/highlight.min.js': ['node_modules/@highlightjs/cdn-assets/highlight.min.js', JS],
-  '/vendor/hl-dark.css': ['node_modules/@highlightjs/cdn-assets/styles/tokyo-night-dark.min.css', CSS],
-  '/vendor/hl-light.css': ['node_modules/@highlightjs/cdn-assets/styles/github.min.css', CSS],
-  '/fonts/orbitron-600.woff2': ['node_modules/@fontsource/orbitron/files/orbitron-latin-600-normal.woff2', 'font/woff2'],
-  '/fonts/orbitron-800.woff2': ['node_modules/@fontsource/orbitron/files/orbitron-latin-800-normal.woff2', 'font/woff2'],
-  '/fonts/jetbrains-mono-400.woff2': ['node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2', 'font/woff2'],
-  '/fonts/jetbrains-mono-600.woff2': ['node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2', 'font/woff2'],
+  '/vendor/hl-dark.css': ['node_modules/@highlightjs/cdn-assets/styles/vs2015.min.css', CSS],
+  '/vendor/hl-light.css': ['node_modules/@highlightjs/cdn-assets/styles/vs.min.css', CSS],
 };
 
 // Inside the packaged executable, static files are embedded as SEA assets.
