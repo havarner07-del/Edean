@@ -1,6 +1,7 @@
 import { $, store, uid, escapeHtml, LANG_FROM_EXT, renderMarkdown, renderReply, streamChat, downloadText, copyText, handleCodeAction } from '/lib.js';
 import { BASE_SYSTEM_PROMPT, MODES, STARTERS } from '/prompts.js';
 import { initCompiler } from '/compiler.js';
+import { initSystems } from '/systems.js';
 
 const els = {
   sidebar: $('sidebar'), scrim: $('scrim'), menuBtn: $('menu-btn'),
@@ -14,8 +15,10 @@ const els = {
   setTheme: $('set-theme'), exportChats: $('export-chats'), deleteAll: $('delete-all'),
 };
 
-const DEFAULT_SETTINGS = { systemPrompt: BASE_SYSTEM_PROMPT, temperature: 0.2, maxTokens: 8192, theme: 'system', model: '', mode: 'build', view: 'chat' };
+const DEFAULT_SETTINGS = { systemPrompt: BASE_SYSTEM_PROMPT, temperature: 0.2, maxTokens: 8192, theme: 'dark', model: '', mode: 'build', view: 'chat' };
 const settings = { ...DEFAULT_SETTINGS, ...store.get('edean.settings', {}) };
+// The HUD redesign made dark the default; move older installs over once.
+if (!settings.hudTheme) { settings.theme = 'dark'; settings.hudTheme = true; }
 let chats = store.get('edean.chats', []);
 let currentId = store.get('edean.current', null);
 let pendingFiles = [];
@@ -26,6 +29,8 @@ const saveChats = () => { store.set('edean.chats', chats); store.set('edean.curr
 const currentChat = () => chats.find((c) => c.id === currentId) || null;
 
 const compiler = initCompiler({ settings, onOpen: () => setView('compiler') });
+// After installing things, refresh the model list and the compiler's languages.
+initSystems({ onChange: () => { loadModels(); compiler.refreshLanguages(); } });
 
 // ---------- views ----------
 function setView(view) {
@@ -106,7 +111,12 @@ function renderWelcome() {
   const wrap = document.createElement('div');
   wrap.className = 'welcome';
   wrap.innerHTML = `
-    <svg class="welcome-logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M11 9 4 16l7 7M21 9l7 7-7 7M18 6l-4 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg class="reactor hero" viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="ring r1" cx="50" cy="50" r="46"/><circle class="ring r2" cx="50" cy="50" r="38"/>
+      <circle class="ring r3" cx="50" cy="50" r="30"/><circle class="core" cx="50" cy="50" r="22"/>
+      <path class="glyph" transform="translate(34 34)" d="M11 9 4 16l7 7M21 9l7 7-7 7M18 6l-4 20"/>
+    </svg>
+    <p class="welcome-kicker">Edean online</p>
     <h1>What are we building?</h1>
     <p>Your private coding assistant. Chats never leave this device and your model.</p>`;
   const grid = document.createElement('div');

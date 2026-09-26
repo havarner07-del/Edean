@@ -4,19 +4,27 @@
   "description": "Edean — a private, self-hosted chat app for a coding-focused LLM.",
   "private": true,
   "type": "module",
-  "main": "server.js",
+  "main": "launcher.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node launcher.js",
     "dev": "node --watch server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "build:exe": "node scripts/build-exe.mjs",
+    "serve": "node server.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/orbitron": "^5.3.0",
     "@highlightjs/cdn-assets": "^11.11.1",
     "dompurify": "^3.4.16",
     "marked": "^18.0.14"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
+  }
 }

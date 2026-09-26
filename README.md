@@ -8,24 +8,43 @@ Edean is a private chat app for your own coding AI. It works like Venice: you ge
 - **Built-in compiler.** Write and run **Python, JavaScript, TypeScript, Java, C, C++, Go, Rust, Ruby, PHP and Bash**, then press **Advice**. Your model reviews the code, including the output or error from your last run, and writes its notes on a **Notepad** beside the editor.
 - **Works with any local model server** that has an OpenAI-compatible API, such as Ollama, LM Studio, llama.cpp or vLLM.
 - **Handles "thinking" models.** Output inside `<think>` tags and reasoning fields (Qwen3, DeepSeek-R1) is shown in a collapsible "Reasoning" section.
-- Streaming responses, a Stop button, Regenerate, message editing, chat search, export and delete, and light and dark themes. The layout also works on mobile.
+- **Desktop executable with a System Check.** Double-click Edean to start it. It shows a green or red light for everything it needs (the AI engine, a coding model, each compiler), and an **Install all missing** button that sets up whatever is missing.
+- A dark-blue HUD theme, plus streaming responses, a Stop button, Regenerate, message editing, chat search, and chat export and delete. The layout also works on mobile.
 
-## Quick start with Ollama
+## Quick start: the Edean app
 
-1. Install [Ollama](https://ollama.com) and pull a coding model:
+1. Get the executable for your computer:
+   - **Download it:** open this repo's **Actions** tab, open the latest **Build executables** run, and download `Edean-windows`, `Edean-macos` or `Edean-linux` from **Artifacts**. You can also run the workflow yourself with **Run workflow**.
+   - **Or build it yourself** (needs Node.js 22+): `npm install && npm run build:exe` creates `dist/Edean.exe` on Windows, `dist/Edean` on macOS or `dist/edean` on Linux.
+2. Double-click it. A small window opens (keep it open while you use Edean), and Edean opens in your browser.
+3. The **Systems check** panel opens automatically if anything is missing:
+   - 🟢 means ready and 🔴 means missing.
+   - Click **Install all missing** to install everything, or click **Install** on a single row. Progress appears live in the panel.
+   - The first run downloads the AI engine (Ollama) and a coding model, which is several GB.
+   - You can open the panel again at any time from **System check** at the bottom of the sidebar.
 
-   ```bash
-   ollama pull qwen2.5-coder:7b
-   ```
+How the installer works on each system:
 
-2. Run Edean (requires Node.js 20 or newer):
+| System  | Uses | Notes |
+|---------|------|-------|
+| Windows | `winget` (built into Windows 10/11) | Installers may show a Windows permission prompt (UAC). |
+| macOS   | [Homebrew](https://brew.sh) | Install Homebrew first if you don't have it. C and C++ come from Apple's Command Line Tools, which have their own installer window. |
+| Linux   | `apt`, `dnf` or `pacman` | Needs admin rights. Edean uses passwordless `sudo` or a graphical `pkexec` prompt when it can. Otherwise it shows you the exact command to run. |
 
-   ```bash
-   npm install
-   npm start
-   ```
+To change settings in the executable, put an `edean.env` file next to it. `edean.env.example` ships alongside the executable.
 
-3. Open <http://localhost:3000>.
+The executables aren't code-signed. The first time you open one, Windows SmartScreen may say "Windows protected your PC" (click **More info → Run anyway**), and macOS may block it (right-click it → **Open**).
+
+## Run from source
+
+Requires Node.js 22 or newer.
+
+```bash
+npm install
+npm start          # starts Edean and opens your browser (same as the executable)
+```
+
+You can also double-click **Start Edean.bat** (Windows) or **Start Edean.command** (macOS/Linux). `npm run serve` starts only the server, without opening a browser.
 
 ## Or run everything with Docker
 
@@ -97,7 +116,9 @@ Copy `.env.example` to `.env` and adjust the settings, or pass them as environme
 | `CODE_RUNNER`   | `auto`                        | `auto`: the runner is on unless Edean is reachable from the network without a password. `on` or `off` force it either way |
 | `RUN_TIMEOUT_MS` | `10000`                      | Time limit for each program run (`COMPILE_TIMEOUT_MS` defaults to 30000) |
 
-Node reads these variables from the environment. For example: `LLM_BASE_URL=http://127.0.0.1:1234/v1 npm start` to use LM Studio.
+The executable reads these from `edean.env` next to it. When running from source, Edean reads them from `.env`.
+
+Environment variables work too. For example, `LLM_BASE_URL=http://127.0.0.1:1234/v1 npm start` uses LM Studio.
 
 The system prompt, temperature, maximum output tokens and theme can be changed in **Settings** inside the app. These settings are stored per browser.
 
@@ -114,15 +135,19 @@ The Edean server only relays each request to your model and streams the reply ba
 ## Project layout
 
 ```
-server.js           Node server: static files, /api/models, /api/chat relay, /api/run
+launcher.js         What the executable runs: loads settings, starts the AI engine and the server, opens the browser
+server.js           Node server: static files, /api/models, /api/chat relay, /api/run, /api/setup
 runner.js           Compiles and runs programs with time and output limits
+toolchains.js       Detects Ollama and the compilers (runs them, so broken stubs don't count)
+setup.js            System check + one-click installer (winget / Homebrew / apt / dnf / pacman, model download)
+scripts/build-exe.mjs  Packs everything into one executable (Node single-executable app)
 public/index.html   App shell
 public/app.js       Chat view, settings, view switching
 public/compiler.js  Compiler tab: editor, Run, Advice and the Notepad
+public/systems.js   Systems check panel
 public/lib.js       Shared helpers: markdown and code rendering, streaming, storage
 public/prompts.js   System prompt, modes, advice prompt, starter programs
-public/styles.css   Styles (light/dark)
-test/               Server tests (npm test)
+public/styles.css   HUD theme (dark blue) and light theme
 ```
 
 ## Development

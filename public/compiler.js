@@ -398,9 +398,9 @@ export function initCompiler({ settings, onOpen }) {
     els.lang.value = state.lang;
   }
 
-  async function loadLanguages() {
+  async function loadLanguages(fresh = false) {
     try {
-      const data = await (await fetch('/api/run/languages')).json();
+      const data = await (await fetch(`/api/run/languages${fresh ? '?fresh=1' : ''}`)).json();
       runner = { enabled: data.enabled, reason: data.reason };
       languages = data.languages.filter((l) => TEMPLATES[l.id]);
     } catch {
@@ -481,6 +481,7 @@ export function initCompiler({ settings, onOpen }) {
 
   return {
     open,
+    refreshLanguages: () => loadLanguages(true),
     focus: () => els.input.focus({ preventScroll: true }),
   };
 }

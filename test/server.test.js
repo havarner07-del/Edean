@@ -150,3 +150,27 @@ test('refuses to run code when reachable from the network without a password', a
     Object.assign(mod.config, saved);
   }
 });
+
+test('reports system status with a light for every dependency', async () => {
+  const data = await (await fetch(`${base}/api/setup/status`, { headers: auth })).json();
+  const ids = data.checks.map((c) => c.id);
+  for (const id of ['ollama', 'engine', 'model', 'node', 'python', 'java', 'gcc', 'gpp', 'go', 'rustc', 'ruby', 'php', 'bash']) {
+    assert.ok(ids.includes(id), id);
+  }
+  // The fake backend is up and serves the default model.
+  assert.equal(data.checks.find((c) => c.id === 'engine').ok, true);
+  assert.equal(data.checks.find((c) => c.id === 'model').ok, true);
+  assert.equal(data.checks.find((c) => c.id === 'node').ok, true);
+  assert.equal(data.canInstall, true);
+});
+
+test('refuses to install when reachable from the network without a password', async () => {
+  const saved = { host: mod.config.host, appPassword: mod.config.appPassword };
+  Object.assign(mod.config, { host: '0.0.0.0', appPassword: '' });
+  try {
+    const r = await fetch(`${base}/api/setup/install`, { method: 'POST', body: '{}' });
+    assert.equal(r.status, 403);
+  } finally {
+    Object.assign(mod.config, saved);
+  }
+});

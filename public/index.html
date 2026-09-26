@@ -8,6 +8,7 @@
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/vendor/hl-dark.css" id="hl-dark">
   <link rel="stylesheet" href="/vendor/hl-light.css" id="hl-light" disabled>
+  <link rel="preload" href="/fonts/orbitron-800.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
   <script src="/vendor/highlight.min.js"></script>
   <script type="module" src="/app.js"></script>
@@ -16,8 +17,14 @@
   <div class="app">
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><path d="M11 9 4 16l7 7M21 9l7 7-7 7M18 6l-4 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>Edean</span>
+        <svg class="reactor logo" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="ring r1" cx="50" cy="50" r="46"/>
+          <circle class="ring r2" cx="50" cy="50" r="38"/>
+          <circle class="ring r3" cx="50" cy="50" r="30"/>
+          <circle class="core" cx="50" cy="50" r="22"/>
+          <path class="glyph" transform="translate(34 34)" d="M11 9 4 16l7 7M21 9l7 7-7 7M18 6l-4 20"/>
+        </svg>
+        <div class="brand-text"><span class="brand-name">EDEAN</span><span class="brand-sub">Private coding AI</span></div>
       </div>
       <button class="btn new-chat" id="new-chat" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -30,6 +37,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 10 4-1.6 7-5.5 7-10V6l-7-3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
           Private · stored only on this device
         </div>
+        <button class="btn ghost systems-btn" id="open-systems" type="button">
+          <span class="light checking" id="systems-light" aria-hidden="true"></span>
+          <span class="systems-btn-text">System check <small id="systems-summary">Checking…</small></span>
+        </button>
         <button class="btn ghost" id="open-settings" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
           Settings
@@ -144,6 +155,44 @@
     </main>
   </div>
 
+  <dialog id="systems" class="hud-dialog" aria-labelledby="systems-title">
+    <div class="systems">
+      <header class="systems-head">
+        <svg class="reactor small" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="ring r1" cx="50" cy="50" r="46"/>
+          <circle class="ring r2" cx="50" cy="50" r="38"/>
+          <circle class="ring r3" cx="50" cy="50" r="30"/>
+          <circle class="core" cx="50" cy="50" r="22"/>
+          <path class="glyph" transform="translate(34 34)" d="M11 9 4 16l7 7M21 9l7 7-7 7M18 6l-4 20"/>
+        </svg>
+        <div>
+          <h2 id="systems-title">Systems check</h2>
+          <p id="systems-platform" class="systems-platform"></p>
+        </div>
+        <button class="icon-btn" id="close-systems" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <section class="check-group">
+        <h3>AI core</h3>
+        <div class="checks" id="checks-ai"></div>
+      </section>
+      <section class="check-group">
+        <h3>Compiler languages</h3>
+        <div class="checks" id="checks-lang"></div>
+      </section>
+      <p class="systems-note" id="systems-note" hidden></p>
+      <div class="install-log" id="install-log" role="log" aria-live="polite" hidden></div>
+      <footer class="systems-actions">
+        <button class="btn ghost" id="recheck" type="button">Re-check</button>
+        <button class="btn glow" id="install-all" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="label">Install all missing</span>
+        </button>
+      </footer>
+    </div>
+  </dialog>
+
   <dialog id="settings">
     <form method="dialog" class="settings-form" id="settings-form">
       <h2>Settings</h2>
@@ -161,9 +210,9 @@
       </div>
       <label>Theme
         <select id="set-theme">
-          <option value="system">System</option>
-          <option value="dark">Dark</option>
+          <option value="dark">Dark (HUD)</option>
           <option value="light">Light</option>
+          <option value="system">Match system</option>
         </select>
       </label>
       <div class="row danger-zone">

@@ -5,9 +5,9 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { accessSync, constants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { TOOLS, detectTools, nodeVersionOk } from './toolchains.js';
 
 export const limits = {
   runTimeoutMs: Number(process.env.RUN_TIMEOUT_MS || 10000),
@@ -22,44 +22,43 @@ function javaFileName(code) {
   return `${m ? m[1] : 'Main'}.java`;
 }
 
-const nodeMajorMinor = process.versions.node.split('.').slice(0, 2).map(Number);
-const nodeHasTypeStripping = nodeMajorMinor[0] > 22 || (nodeMajorMinor[0] === 22 && nodeMajorMinor[1] >= 6);
+const WIN = process.platform === 'win32';
+const EXE = WIN ? 'main.exe' : 'main';
 
-// `compile` and `run` receive (dir, file) and return [command, ...args].
+// `tool` names the toolchain from toolchains.js. `compile` and `run` receive
+// (dir, file, t) where t is the detected tool, and return [command, ...args].
+const bin = (d) => [path.join(d, EXE)];
 export const LANGUAGES = {
-  python: { label: 'Python 3', file: 'main.py', needs: ['python3'], run: (d, f) => ['python3', '-u', f] },
-  javascript: { label: 'JavaScript (Node.js)', file: 'main.js', needs: [], run: (d, f) => [process.execPath, f] },
+  python: { label: 'Python 3', file: 'main.py', tool: 'python', run: (d, f, t) => [t.cmd, ...t.pre, '-u', f] },
+  javascript: { label: 'JavaScript (Node.js)', file: 'main.js', tool: 'node', run: (d, f, t) => [t.cmd, f] },
   typescript: {
-    label: 'TypeScript (Node.js)', file: 'main.ts', needs: [], supported: nodeHasTypeStripping,
-    unsupportedReason: 'needs Node.js 22.6 or newer',
-    run: (d, f) => [process.execPath, '--experimental-strip-types', '--no-warnings', f],
+    label: 'TypeScript (Node.js)', file: 'main.ts', tool: 'node', minNode: [22, 6],
+    run: (d, f, t) => [t.cmd, '--experimental-strip-types', '--no-warnings', f],
   },
   // Java 11+ can compile and run a single source file in one step.
-  java: { label: 'Java', file: javaFileName, needs: ['java'], runTimeoutMs: 20000, run: (d, f) => ['java', f] },
-  c: { label: 'C', file: 'main.c', needs: ['gcc'], compile: (d, f) => ['gcc', '-O2', '-Wall', '-o', 'main', f, '-lm'], run: (d) => [path.join(d, 'main')] },
-  cpp: { label: 'C++', file: 'main.cpp', needs: ['g++'], compile: (d, f) => ['g++', '-O2', '-Wall', '-std=c++17', '-o', 'main', f], run: (d) => [path.join(d, 'main')] },
-  go: { label: 'Go', file: 'main.go', needs: ['go'], compile: (d, f) => ['go', 'build', '-o', 'main', f], run: (d) => [path.join(d, 'main')] },
-  rust: { label: 'Rust', file: 'main.rs', needs: ['rustc'], compile: (d, f) => ['rustc', '-O', '-o', 'main', f], run: (d) => [path.join(d, 'main')] },
-  ruby: { label: 'Ruby', file: 'main.rb', needs: ['ruby'], run: (d, f) => ['ruby', f] },
-  php: { label: 'PHP', file: 'main.php', needs: ['php'], run: (d, f) => ['php', f] },
-  bash: { label: 'Bash', file: 'main.sh', needs: ['bash'], run: (d, f) => ['bash', f] },
+  java: { label: 'Java', file: javaFileName, tool: 'java', runTimeoutMs: 20000, run: (d, f, t) => [t.cmd, f] },
+  c: { label: 'C', file: 'main.c', tool: 'gcc', compile: (d, f, t) => [t.cmd, '-O2', '-Wall', '-o', EXE, f, '-lm'], run: bin },
+  cpp: { label: 'C++', file: 'main.cpp', tool: 'gpp', compile: (d, f, t) => [t.cmd, '-O2', '-Wall', '-std=c++17', '-o', EXE, f], run: bin },
+  go: { label: 'Go', file: 'main.go', tool: 'go', compile: (d, f, t) => [t.cmd, 'build', '-o', EXE, f], run: bin },
+  rust: { label: 'Rust', file: 'main.rs', tool: 'rustc', compile: (d, f, t) => [t.cmd, '-O', '-o', EXE, f], run: bin },
+  ruby: { label: 'Ruby', file: 'main.rb', tool: 'ruby', run: (d, f, t) => [t.cmd, f] },
+  php: { label: 'PHP', file: 'main.php', tool: 'php', run: (d, f, t) => [t.cmd, f] },
+  bash: { label: 'Bash', file: 'main.sh', tool: 'bash', run: (d, f, t) => [t.cmd, f] },
 };
 
-function onPath(cmd) {
-  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-    if (!dir) continue;
-    try { accessSync(path.join(dir, cmd), constants.X_OK); return true; } catch { /* keep looking */ }
-  }
-  return false;
-}
+const TOOL_LABEL = Object.fromEntries(TOOLS.map((t) => [t.id, t.label]));
 
-// Checked on every call so a toolchain installed while Edean is running shows up.
-export function listLanguages() {
+export async function listLanguages({ fresh = false } = {}) {
+  const tools = await detectTools({ fresh });
   return Object.entries(LANGUAGES).map(([id, spec]) => {
-    const missing = spec.needs.filter((c) => !onPath(c));
-    const available = spec.supported !== false && missing.length === 0;
-    const reason = spec.supported === false ? spec.unsupportedReason : missing.length ? `${missing.join(', ')} not installed` : '';
-    return { id, label: spec.label, available, reason };
+    const t = tools[spec.tool];
+    let available = !!t?.found;
+    let reason = available ? '' : `${TOOL_LABEL[spec.tool]} not installed`;
+    if (available && spec.minNode && !nodeVersionOk(t.version, ...spec.minNode)) {
+      available = false;
+      reason = `needs Node.js ${spec.minNode.join('.')} or newer`;
+    }
+    return { id, label: spec.label, available, reason, tool: spec.tool };
   });
 }
 
@@ -82,12 +81,20 @@ function exec(argv, { cwd, env, stdin = '', timeoutMs, signal }) {
     let size = 0;
     let child;
     try {
-      child = spawn(argv[0], argv.slice(1), { cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      // A separate process group lets us kill everything the program starts (POSIX only).
+      child = spawn(argv[0], argv.slice(1), { cwd, env, detached: !WIN, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (err) {
       out.stderr = String(err.message || err);
       return resolve(out);
     }
-    const killGroup = () => { try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ } };
+    const killGroup = () => {
+      if (!child.pid) return;
+      if (WIN) {
+        if (child.exitCode === null) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
+        return;
+      }
+      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ }
+    };
     const timer = setTimeout(() => { out.timedOut = true; killGroup(); }, timeoutMs);
     const onAbort = () => killGroup();
     signal?.addEventListener('abort', onAbort);
@@ -129,8 +136,9 @@ export async function runCode({ language, code, stdin }, { signal } = {}) {
   if (!spec) throw Object.assign(new Error(`Unknown language "${language}"`), { status: 400 });
   if (typeof code !== 'string' || !code.trim()) throw Object.assign(new Error('There is no code to run'), { status: 400 });
   if (Buffer.byteLength(code) > limits.maxCodeBytes) throw Object.assign(new Error('Code is too large (max 256 KB)'), { status: 413 });
-  const info = listLanguages().find((l) => l.id === language);
+  const info = (await listLanguages()).find((l) => l.id === language);
   if (!info.available) throw Object.assign(new Error(`${spec.label} can't run here: ${info.reason}`), { status: 400 });
+  const tool = (await detectTools())[spec.tool];
   if (active >= limits.maxConcurrent) throw Object.assign(new Error('Too many programs running at once — try again in a moment'), { status: 429 });
 
   active++;
@@ -142,12 +150,12 @@ export async function runCode({ language, code, stdin }, { signal } = {}) {
     const input = typeof stdin === 'string' ? stdin : '';
     let compile = null;
     if (spec.compile) {
-      compile = await exec(spec.compile(dir, file), { cwd: dir, env, timeoutMs: limits.compileTimeoutMs, signal });
+      compile = await exec(spec.compile(dir, file, tool), { cwd: dir, env, timeoutMs: limits.compileTimeoutMs, signal });
       if (compile.exitCode !== 0) {
         return { language, phase: 'compile', ...compile, compileMs: compile.durationMs };
       }
     }
-    const run = await exec(spec.run(dir, file), { cwd: dir, env, stdin: input, timeoutMs: spec.runTimeoutMs || limits.runTimeoutMs, signal });
+    const run = await exec(spec.run(dir, file, tool), { cwd: dir, env, stdin: input, timeoutMs: spec.runTimeoutMs || limits.runTimeoutMs, signal });
     return {
       language,
       phase: 'run',

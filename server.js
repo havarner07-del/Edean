@@ -8,8 +8,12 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { listLanguages, runCode } from './runner.js';
+import { getStatus, startInstall, installLog, startOllama } from './setup.js';
+import { isSea } from './toolchains.js';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
+// import.meta.url is undefined once bundled into the Edean executable.
+const HERE = typeof import.meta.url === 'string' ? fileURLToPath(import.meta.url) : '';
+const ROOT = HERE ? path.dirname(HERE) : path.dirname(process.execPath);
 
 export const config = {
   port: Number(process.env.PORT || 3000),
@@ -25,21 +29,37 @@ export const config = {
   maxBodyBytes: 8 * 1024 * 1024,
 };
 
-const STATIC = {
+const JS = 'text/javascript; charset=utf-8';
+const CSS = 'text/css; charset=utf-8';
+export const STATIC = {
   '/': ['public/index.html', 'text/html; charset=utf-8'],
-  '/app.js': ['public/app.js', 'text/javascript; charset=utf-8'],
-  '/prompts.js': ['public/prompts.js', 'text/javascript; charset=utf-8'],
-  '/lib.js': ['public/lib.js', 'text/javascript; charset=utf-8'],
-  '/compiler.js': ['public/compiler.js', 'text/javascript; charset=utf-8'],
-  '/styles.css': ['public/styles.css', 'text/css; charset=utf-8'],
+  '/app.js': ['public/app.js', JS],
+  '/prompts.js': ['public/prompts.js', JS],
+  '/lib.js': ['public/lib.js', JS],
+  '/compiler.js': ['public/compiler.js', JS],
+  '/systems.js': ['public/systems.js', JS],
+  '/styles.css': ['public/styles.css', CSS],
   '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
-  // Libraries are served from node_modules so the browser never calls a CDN.
-  '/vendor/marked.esm.js': ['node_modules/marked/lib/marked.esm.js', 'text/javascript; charset=utf-8'],
-  '/vendor/purify.es.mjs': ['node_modules/dompurify/dist/purify.es.mjs', 'text/javascript; charset=utf-8'],
-  '/vendor/highlight.min.js': ['node_modules/@highlightjs/cdn-assets/highlight.min.js', 'text/javascript; charset=utf-8'],
-  '/vendor/hl-dark.css': ['node_modules/@highlightjs/cdn-assets/styles/github-dark.min.css', 'text/css; charset=utf-8'],
-  '/vendor/hl-light.css': ['node_modules/@highlightjs/cdn-assets/styles/github.min.css', 'text/css; charset=utf-8'],
+  // Libraries and fonts are served from node_modules so the browser never calls a CDN.
+  '/vendor/marked.esm.js': ['node_modules/marked/lib/marked.esm.js', JS],
+  '/vendor/purify.es.mjs': ['node_modules/dompurify/dist/purify.es.mjs', JS],
+  '/vendor/highlight.min.js': ['node_modules/@highlightjs/cdn-assets/highlight.min.js', JS],
+  '/vendor/hl-dark.css': ['node_modules/@highlightjs/cdn-assets/styles/tokyo-night-dark.min.css', CSS],
+  '/vendor/hl-light.css': ['node_modules/@highlightjs/cdn-assets/styles/github.min.css', CSS],
+  '/fonts/orbitron-600.woff2': ['node_modules/@fontsource/orbitron/files/orbitron-latin-600-normal.woff2', 'font/woff2'],
+  '/fonts/orbitron-800.woff2': ['node_modules/@fontsource/orbitron/files/orbitron-latin-800-normal.woff2', 'font/woff2'],
+  '/fonts/jetbrains-mono-400.woff2': ['node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2', 'font/woff2'],
+  '/fonts/jetbrains-mono-600.woff2': ['node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2', 'font/woff2'],
 };
+
+// Inside the packaged executable, static files are embedded as SEA assets.
+const sea = isSea ? process.getBuiltinModule('node:sea') : null;
+function readAsset(rel, cb) {
+  if (sea) {
+    try { return cb(null, Buffer.from(sea.getAsset(rel))); } catch (err) { return cb(err); }
+  }
+  fs.readFile(path.join(ROOT, rel), cb);
+}
 
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
@@ -127,9 +147,44 @@ export function runnerBlockedReason() {
   return null;
 }
 
-function handleLanguages(res) {
+async function handleLanguages(req, res) {
   const blocked = runnerBlockedReason();
-  sendJson(res, 200, { enabled: !blocked, reason: blocked || '', languages: listLanguages() });
+  const fresh = new URL(req.url, 'http://x').searchParams.has('fresh');
+  sendJson(res, 200, { enabled: !blocked, reason: blocked || '', languages: await listLanguages({ fresh }) });
+}
+
+// Installing software is only allowed from this machine, or behind the app password.
+export function setupBlockedReason() {
+  if (!isLoopback(config.host) && !config.appPassword) {
+    return 'Installing is disabled because Edean is reachable from your network without APP_PASSWORD.';
+  }
+  return null;
+}
+
+async function handleSetup(req, res, pathname) {
+  const params = new URL(req.url, 'http://x').searchParams;
+  if (pathname === '/api/setup/status' && req.method === 'GET') {
+    const status = await getStatus(config, { fresh: params.has('fresh') });
+    const blocked = setupBlockedReason();
+    return sendJson(res, 200, { ...status, canInstall: !blocked, installBlockedReason: blocked || '' });
+  }
+  if (pathname === '/api/setup/log' && req.method === 'GET') {
+    return sendJson(res, 200, installLog(Number(params.get('since')) || 0));
+  }
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+  const blocked = setupBlockedReason();
+  if (blocked) return sendJson(res, 403, { error: blocked });
+  if (pathname === '/api/setup/install') {
+    let body = {};
+    try { body = JSON.parse((await readBody(req)) || '{}'); } catch { /* install everything */ }
+    const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === 'string') : null;
+    if (!startInstall(config, ids)) return sendJson(res, 409, { error: 'An install is already running' });
+    return sendJson(res, 202, { started: true });
+  }
+  if (pathname === '/api/setup/start-engine') {
+    return sendJson(res, 200, { started: startOllama() });
+  }
+  return sendJson(res, 404, { error: 'Not found' });
 }
 
 async function handleRun(req, res) {
@@ -212,7 +267,7 @@ async function handleChat(req, res) {
 function serveStatic(req, res, pathname) {
   const entry = STATIC[pathname];
   if (!entry) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
-  fs.readFile(path.join(ROOT, entry[0]), (err, data) => {
+  readAsset(entry[0], (err, data) => {
     if (err) return send(res, 500, 'Missing file: ' + entry[0], { 'Content-Type': 'text/plain' });
     send(res, 200, data, { 'Content-Type': entry[1], 'Cache-Control': 'no-cache' });
   });
@@ -225,10 +280,11 @@ export function createServer() {
     }
     const { pathname } = new URL(req.url, 'http://localhost');
     try {
-      if (pathname === '/api/health') return sendJson(res, 200, { ok: true });
+      if (pathname === '/api/health') return sendJson(res, 200, { ok: true, app: 'edean' });
+      if (pathname.startsWith('/api/setup/')) return await handleSetup(req, res, pathname);
       if (pathname === '/api/models' && req.method === 'GET') return await handleModels(res);
       if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
-      if (pathname === '/api/run/languages' && req.method === 'GET') return handleLanguages(res);
+      if (pathname === '/api/run/languages' && req.method === 'GET') return await handleLanguages(req, res);
       if (pathname === '/api/run' && req.method === 'POST') return await handleRun(req, res);
       if (req.method === 'GET') return serveStatic(req, res, pathname);
       send(res, 405, 'Method not allowed', { 'Content-Type': 'text/plain' });
@@ -239,15 +295,29 @@ export function createServer() {
   });
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  createServer().listen(config.port, config.host, () => {
-    console.log(`Edean running at http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
-    console.log(`Model backend: ${config.llmBaseUrl}  (default model: ${config.defaultModel})`);
-    if (config.host !== '127.0.0.1' && config.host !== 'localhost' && !config.appPassword) {
-      console.warn('Warning: Edean is listening beyond localhost without APP_PASSWORD set.');
-    }
-    const blocked = runnerBlockedReason();
-    const langs = listLanguages().filter((l) => l.available).map((l) => l.id);
+export async function startServer({ port = config.port, host = config.host } = {}) {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => { server.off('error', reject); resolve(); });
+  });
+  const shown = host === '0.0.0.0' || host === '::' ? 'localhost' : host;
+  console.log(`Edean running at http://${shown}:${server.address().port}`);
+  console.log(`Model backend: ${config.llmBaseUrl}  (default model: ${config.defaultModel})`);
+  if (!isLoopback(host) && !config.appPassword) {
+    console.warn('Warning: Edean is listening beyond localhost without APP_PASSWORD set.');
+  }
+  const blocked = runnerBlockedReason();
+  listLanguages().then((all) => {
+    const langs = all.filter((l) => l.available).map((l) => l.id);
     console.log(blocked ? `Code runner: disabled — ${blocked}` : `Code runner: ${langs.join(', ') || 'no toolchains found'}`);
+  });
+  return server;
+}
+
+if (HERE && process.argv[1] && path.resolve(process.argv[1]) === HERE) {
+  startServer().catch((err) => {
+    console.error(err.code === 'EADDRINUSE' ? `Port ${config.port} is already in use. Set PORT to use another one.` : err);
+    process.exit(1);
   });
 }

@@ -1,0 +1,41 @@
+name: Build executables
+
+# Builds Edean.exe (Windows), Edean (macOS) and edean (Linux).
+# Download them from the run's "Artifacts" section on the Actions tab.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Edean-windows
+            file: dist/Edean.exe
+          - os: macos-latest
+            name: Edean-macos
+            file: dist/Edean
+          - os: ubuntu-latest
+            name: Edean-linux
+            file: dist/edean
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+        if: matrix.os == 'ubuntu-latest'
+      - run: npm run build:exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ matrix.file }}
+            dist/edean.env.example
