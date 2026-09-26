@@ -5,12 +5,14 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { listLanguages, runCode } from './runner.js';
 import { getStatus, startInstall, installLog, startOllama } from './setup.js';
 import { isSea } from './toolchains.js';
 import * as drive from './drive.js';
+import * as auth from './auth.js';
+import * as github from './github.js';
+import * as advisors from './advisors.js';
 
 // import.meta.url is undefined once bundled into the Edean executable.
 const HERE = typeof import.meta.url === 'string' ? fileURLToPath(import.meta.url) : '';
@@ -40,6 +42,7 @@ export const STATIC = {
   '/compiler.js': ['public/compiler.js', JS],
   '/systems.js': ['public/systems.js', JS],
   '/drive.js': ['public/drive.js', JS],
+  '/workspace.js': ['public/workspace.js', JS],
   '/styles.css': ['public/styles.css', CSS],
   '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
   // Libraries are served from node_modules so the browser never calls a CDN.
@@ -64,7 +67,7 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'no-referrer',
   'X-Frame-Options': 'DENY',
   'Content-Security-Policy':
-    "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    "default-src 'self'; img-src 'self' data: https://avatars.githubusercontent.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
 };
 
 function send(res, status, body, headers = {}) {
@@ -82,16 +85,6 @@ function upstreamHeaders() {
   return h;
 }
 
-function isAuthorized(req) {
-  if (!config.appPassword) return true;
-  const header = req.headers.authorization || '';
-  if (!header.startsWith('Basic ')) return false;
-  const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
-  const password = decoded.slice(decoded.indexOf(':') + 1);
-  const a = crypto.createHash('sha256').update(password).digest();
-  const b = crypto.createHash('sha256').update(config.appPassword).digest();
-  return crypto.timingSafeEqual(a, b);
-}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -139,8 +132,8 @@ const isLoopback = (host) => ['127.0.0.1', 'localhost', '::1'].includes(host);
 export function runnerBlockedReason() {
   if (config.codeRunner === 'off') return 'The code runner is turned off (CODE_RUNNER=off).';
   if (config.codeRunner === 'on') return null;
-  if (!isLoopback(config.host) && !config.appPassword) {
-    return 'The code runner is disabled because Edean is reachable from your network without APP_PASSWORD. Set APP_PASSWORD (or CODE_RUNNER=on if you know it is safe).';
+  if (!isLoopback(config.host) && !auth.hasCustomPassword()) {
+    return 'The code runner is disabled because Edean is reachable from your network and still uses the default password. Change the password in Settings (or set CODE_RUNNER=on if you know it is safe).';
   }
   return null;
 }
@@ -153,8 +146,8 @@ async function handleLanguages(req, res) {
 
 // Installing software is only allowed from this machine, or behind the app password.
 export function setupBlockedReason() {
-  if (!isLoopback(config.host) && !config.appPassword) {
-    return 'Installing is disabled because Edean is reachable from your network without APP_PASSWORD.';
+  if (!isLoopback(config.host) && !auth.hasCustomPassword()) {
+    return 'Installing is disabled because Edean is reachable from your network and still uses the default password. Change it in Settings first.';
   }
   return null;
 }
@@ -201,6 +194,57 @@ async function handleRun(req, res) {
     if (!abort.signal.aborted) sendJson(res, 200, result);
   } catch (err) {
     if (!abort.signal.aborted) sendJson(res, err.status || 500, { error: err.status ? err.message : 'Could not run the program' });
+  }
+}
+
+// GitHub (Workspace) and advisors (Claude / GitHub Models).
+async function handleGithub(req, res, pathname) {
+  const blocked = setupBlockedReason();
+  if (blocked) return sendJson(res, 403, { error: blocked.replace('Installing is', 'GitHub access is') });
+  const q = Object.fromEntries(new URL(req.url, 'http://x').searchParams);
+  const body = async () => { try { return JSON.parse((await readBody(req)) || '{}'); } catch { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); } };
+  const route = `${req.method} ${pathname.slice('/api/github'.length)}`;
+  try {
+    switch (route) {
+      case 'GET /status': return sendJson(res, 200, await github.status());
+      case 'POST /connect': return sendJson(res, 200, await github.connect((await body()).token));
+      case 'POST /disconnect': await github.disconnect(); return sendJson(res, 200, { ok: true });
+      case 'GET /repos': return sendJson(res, 200, { repos: await github.listRepos() });
+      case 'GET /repo': return sendJson(res, 200, await github.repoInfo(q.owner, q.repo));
+      case 'GET /branches': return sendJson(res, 200, { branches: await github.branches(q.owner, q.repo) });
+      case 'POST /branches': { const b = await body(); return sendJson(res, 200, await github.createBranch(b.owner, b.repo, b.name, b.from)); }
+      case 'GET /tree': return sendJson(res, 200, await github.tree(q.owner, q.repo, q.branch));
+      case 'GET /file': return sendJson(res, 200, await github.readFile(q.owner, q.repo, q.path, q.branch));
+      case 'POST /commit': { const b = await body(); return sendJson(res, 200, await github.commit(b.owner, b.repo, b.branch, b.message, b.changes)); }
+      case 'GET /commits': return sendJson(res, 200, { commits: await github.commits(q.owner, q.repo, q.branch) });
+      case 'GET /pulls': return sendJson(res, 200, { pulls: await github.pulls(q.owner, q.repo) });
+      case 'POST /pulls': { const b = await body(); return sendJson(res, 200, await github.createPull(b.owner, b.repo, b)); }
+      case 'GET /dependencies': return sendJson(res, 200, await github.dependencies(q.owner, q.repo, q.branch));
+      case 'GET /zip': {
+        const upstream = await github.zipball(q.owner, q.repo, q.branch);
+        const name = `${q.repo}-${String(q.branch).replace(/[^\w.-]+/g, '-')}.zip`;
+        res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${name}"` });
+        for await (const chunk of upstream.body) res.write(chunk);
+        return res.end();
+      }
+      default: return sendJson(res, 404, { error: 'Not found' });
+    }
+  } catch (err) {
+    if (res.headersSent) return res.end();
+    return sendJson(res, err.status || 500, { error: err.status ? err.message : `GitHub request failed: ${err.message}` });
+  }
+}
+
+async function handleAdvisors(req, res, pathname) {
+  const blocked = setupBlockedReason();
+  if (blocked) return sendJson(res, 403, { error: blocked.replace('Installing is', 'Advisors are') });
+  try {
+    if (pathname === '/api/advisors' && req.method === 'GET') return sendJson(res, 200, await advisors.advisorStatus());
+    if (pathname === '/api/advisors/settings' && req.method === 'POST') return sendJson(res, 200, await advisors.updateAdvisors(JSON.parse((await readBody(req)) || '{}')));
+    if (pathname === '/api/advisors/ask' && req.method === 'POST') return sendJson(res, 200, await advisors.ask(JSON.parse((await readBody(req)) || '{}')));
+    return sendJson(res, 404, { error: 'Not found' });
+  } catch (err) {
+    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Advisor request failed: ${err.message}` });
   }
 }
 
@@ -305,7 +349,21 @@ async function handleChat(req, res) {
   res.end();
 }
 
+// Monaco (VS Code's editor) is served as a whole directory of files.
+export const MONACO_DIR = 'node_modules/monaco-editor/min';
+const MIME = { '.js': JS, '.css': CSS, '.ttf': 'font/ttf', '.json': 'application/json', '.svg': 'image/svg+xml' };
+
+function serveMonaco(res, pathname) {
+  const rel = decodeURIComponent(pathname.slice('/vendor/monaco/'.length));
+  if (!rel || rel.includes('..') || rel.includes('\\') || !/^[\w./-]+$/.test(rel)) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
+  readAsset(`${MONACO_DIR}/${rel}`, (err, data) => {
+    if (err) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
+    send(res, 200, data, { 'Content-Type': MIME[path.extname(rel)] || 'application/octet-stream', 'Cache-Control': 'public, max-age=86400' });
+  });
+}
+
 function serveStatic(req, res, pathname) {
+  if (pathname.startsWith('/vendor/monaco/')) return serveMonaco(res, pathname);
   const entry = STATIC[pathname];
   if (!entry) return send(res, 404, 'Not found', { 'Content-Type': 'text/plain' });
   readAsset(entry[0], (err, data) => {
@@ -315,15 +373,35 @@ function serveStatic(req, res, pathname) {
 }
 
 export function createServer() {
+  auth.useConfig(config);
   return http.createServer(async (req, res) => {
-    if (!isAuthorized(req)) {
-      return send(res, 401, 'Authentication required', { 'WWW-Authenticate': 'Basic realm="Edean", charset="UTF-8"' });
-    }
-    const { pathname } = new URL(req.url, 'http://localhost');
+    const { pathname, searchParams } = new URL(req.url, 'http://localhost');
     try {
+      // Public: health check, the login page and its icon.
       if (pathname === '/api/health') return sendJson(res, 200, { ok: true, app: 'edean' });
+      if (pathname === '/favicon.svg') return serveStatic(req, res, pathname);
+      if (pathname === '/login') return await handleLogin(req, res, searchParams);
+      if (!auth.isAuthenticated(req)) {
+        if (pathname.startsWith('/api/')) {
+          return send(res, 401, JSON.stringify({ error: 'Sign in required' }), { 'Content-Type': 'application/json', 'X-Edean-Auth': 'required' });
+        }
+        return send(res, 302, '', { Location: '/login', 'Cache-Control': 'no-store' });
+      }
+      if (pathname === '/api/logout' && req.method === 'POST') {
+        return send(res, 200, JSON.stringify({ ok: true }), { 'Set-Cookie': auth.endSession(req), 'Content-Type': 'application/json' });
+      }
+      if (pathname === '/api/password' && req.method === 'POST') {
+        const { current, next } = JSON.parse((await readBody(req)) || '{}');
+        try { auth.changePassword(current, next); } catch (err) { return sendJson(res, err.status || 400, { error: err.message }); }
+        return send(res, 200, JSON.stringify({ ok: true }), { 'Set-Cookie': auth.createSession(), 'Content-Type': 'application/json' });
+      }
+      if (pathname === '/api/account' && req.method === 'GET') {
+        return sendJson(res, 200, { customPassword: auth.hasCustomPassword(), passwordFromEnv: auth.passwordFromEnv() });
+      }
       if (pathname.startsWith('/api/setup/')) return await handleSetup(req, res, pathname);
       if (pathname.startsWith('/api/drive/')) return await handleDrive(req, res, pathname);
+      if (pathname.startsWith('/api/github/')) return await handleGithub(req, res, pathname);
+      if (pathname === '/api/advisors' || pathname.startsWith('/api/advisors/')) return await handleAdvisors(req, res, pathname);
       if (pathname === '/api/models' && req.method === 'GET') return await handleModels(res);
       if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
       if (pathname === '/api/run/languages' && req.method === 'GET') return await handleLanguages(req, res);
@@ -337,6 +415,20 @@ export function createServer() {
   });
 }
 
+async function handleLogin(req, res, params) {
+  const page = (error, status = 200) => send(res, status, auth.loginPage(error), { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+  if (req.method === 'GET') return auth.isAuthenticated(req) ? send(res, 302, '', { Location: '/' }) : page(params.get('error') ? 'Wrong password.' : '');
+  if (req.method !== 'POST') return send(res, 405, 'Method not allowed');
+  const ip = req.socket.remoteAddress || '';
+  if (auth.tooManyAttempts(ip)) return page('Too many attempts. Wait a few minutes and try again.', 429);
+  const password = new URLSearchParams(await readBody(req)).get('password') || '';
+  if (!auth.checkPassword(password)) {
+    auth.recordFailure(ip);
+    return page('Wrong password.', 401);
+  }
+  return send(res, 303, '', { Location: '/', 'Set-Cookie': auth.createSession(), 'Cache-Control': 'no-store' });
+}
+
 export async function startServer({ port = config.port, host = config.host } = {}) {
   const server = createServer();
   await new Promise((resolve, reject) => {
@@ -346,8 +438,8 @@ export async function startServer({ port = config.port, host = config.host } = {
   const shown = host === '0.0.0.0' || host === '::' ? 'localhost' : host;
   console.log(`Edean running at http://${shown}:${server.address().port}`);
   console.log(`Model backend: ${config.llmBaseUrl}  (default model: ${config.defaultModel})`);
-  if (!isLoopback(host) && !config.appPassword) {
-    console.warn('Warning: Edean is listening beyond localhost without APP_PASSWORD set.');
+  if (!isLoopback(host) && !auth.hasCustomPassword()) {
+    console.warn('Warning: Edean is reachable from your network and still uses the default password 0000. Change it in Settings.');
   }
   const blocked = runnerBlockedReason();
   listLanguages().then((all) => {

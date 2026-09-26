@@ -8,6 +8,9 @@ Edean is a private chat app for your own coding AI. It works like Venice: you ge
 - **Built-in compiler.** Write and run **Python, JavaScript, TypeScript, Java, C, C++, Go, Rust, Ruby, PHP and Bash**, then press **Advice**. Your model reviews the code, including the output or error from your last run, and writes its notes on a **Notepad** beside the editor.
 - **Works with any local model server** that has an OpenAI-compatible API, such as Ollama, LM Studio, llama.cpp or vLLM.
 - **Handles "thinking" models.** Output inside `<think>` tags and reasoning fields (Qwen3, DeepSeek-R1) is shown in a collapsible "Reasoning" section.
+- **Login screen.** A password protects the app. It starts as `0000`; change it in **Settings → Password**.
+- **Workspace (VS Code-style).** Open your GitHub repositories and edit them in Monaco, the editor inside VS Code. You get an Explorer, tabs, Save / Save All, a diff view, Source Control (commit & push), branches, pull requests, dependencies, Run/Output, a command palette, a blue status bar, and an AI panel that proposes changes you can apply. Point it at Edean's own repository and it can improve itself through branches and pull requests.
+- **Advisors: Claude & Copilot.** When the local model is unsure, it asks Claude or GitHub Models one short question instead of guessing, then finishes its answer. This keeps paid usage to a few hundred tokens instead of whole conversations.
 - **Save chats to Google Drive.** Connect your Google account and pick a folder. Chats are then saved there as files instead of on your computer.
 - **Desktop executable with a System Check.** Double-click Edean to start it. It shows a green or red light for everything it needs (the AI engine, a coding model, each compiler), and an **Install all missing** button that sets up whatever is missing.
 - A dark-blue HUD theme, plus streaming responses, a Stop button, Regenerate, message editing, chat search, and chat export and delete. The layout also works on mobile.
@@ -69,6 +72,66 @@ Choose by how much memory your GPU has (VRAM), or your RAM if you don't have a G
 
 Every model you have pulled appears in the model menu at the top of the app. Newer coding models come out regularly, so check the Ollama library for the latest ones.
 
+## Signing in
+
+Edean opens on a login screen:
+- The password starts as **`0000`**. Change it in **Settings → Password**. It's stored as a salted hash in `~/.edean/auth.json`.
+- You can also set `APP_PASSWORD` in your settings file to fix the password there.
+- Sessions last 30 days. **Sign out** is in Settings.
+- Repeated wrong passwords are slowed down.
+- If Edean is reachable from your network while still using `0000`, the code runner, installer, GitHub access and advisors switch themselves off until you pick your own password.
+
+## Workspace: your repositories, VS Code-style
+
+Open the **Workspace** tab.
+
+1. **Connect GitHub.** Create a [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new) for the repositories you want to use, with these permissions:
+   - Contents: read & write
+   - Pull requests: read & write
+   - Models: read (only needed for the Copilot advisor)
+
+   Paste it into the Workspace. It's kept in `~/.edean/github.json` (readable only by you), and the browser never sees it.
+2. **Open a repository** from the list.
+
+What works like VS Code:
+
+| Feature | How |
+|---|---|
+| Explorer | Folders, new file (＋), rename ✎, delete 🗑. Modified files are shown in yellow (M), new files in green (U). |
+| Editor | Monaco (the VS Code editor): syntax highlighting, IntelliSense for JS/TS, find/replace (<kbd>Ctrl</kbd>+<kbd>F</kbd>), minimap, multi-cursor |
+| Save | <kbd>Ctrl</kbd>+<kbd>S</kbd>, or **Save** (a ● on the tab means unsaved). Saved changes are kept in this browser, per repository and branch, until you commit. |
+| Source Control | Lists your changes. Click one for a side-by-side diff, ↺ discards it, and **Commit & Push** makes one commit on GitHub (<kbd>Ctrl</kbd>+<kbd>Enter</kbd> in the message box) |
+| Branches | Switch branch, or create one with ＋ (your uncommitted changes come along, like `git switch -c`) |
+| Pull requests | Open a PR from the current branch into the default branch, and see open PRs |
+| Dependencies | From GitHub's dependency graph, or from `package.json`, `requirements.txt`, `go.mod` or `Cargo.toml` |
+| Run | <kbd>F5</kbd> runs the current file with the built-in runner. Output appears in the panel, with an input box for stdin. |
+| Export | Download the current file, download the branch as a `.zip`, or send the file to the Compiler tab |
+| Command palette | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> for all commands, and <kbd>Ctrl</kbd>+<kbd>P</kbd> to go to a file |
+
+**Edean AI panel (right side):**
+- Ask about the repository, or ask for a change. It sees the file list and the open file.
+- Each file it proposes gets an **Apply to …** button. Applying adds the file to your changes and opens a diff, so you review it before committing.
+- To have Edean **improve itself**, open Edean's own repository and create a branch, for example `edean/better-search`.
+- Then ask for the change, apply it, commit, and open a pull request. You stay in control of what gets merged.
+
+## Advisors: Claude and Copilot
+
+Your local model does most of the work for free. When it isn't confident about something specific, it can pause and write `ASK(claude): …` or `ASK(copilot): …`:
+- Edean sends only that one short question to the advisor.
+- It shows the exchange as a collapsible **Asked Claude · 51 tokens** note.
+- It hands the answer back to the local model, which finishes the reply.
+
+This spends a small number of paid tokens on exactly the part it was stuck on, instead of sending the whole conversation to a paid model. Each assistant reply also has **Ask Claude** / **Ask Copilot** buttons for a second opinion.
+
+| Advisor | Uses | Setup |
+|---|---|---|
+| **Claude** | Anthropic's API through the official `@anthropic-ai/sdk`. The default model is `claude-opus-5`, with adaptive thinking. | Paste your [Anthropic API key](https://console.anthropic.com/settings/keys) in **Settings → Advisors** (or set `ANTHROPIC_API_KEY`). |
+| **Copilot** | [GitHub Models](https://github.com/marketplace/models), GitHub's AI inference API (default model `openai/gpt-4.1`). GitHub Copilot itself has no public API for other apps, so this is GitHub's supported way to call AI models with your GitHub account. | Connect GitHub in the Workspace with a token that has the **Models: read** permission. |
+
+More on the Claude settings:
+- For Claude requests, Edean turns on the API's server-side **fallback** (`fallbacks: "default"`). If Claude declines a request for safety reasons, the API retries it on a fallback model within the same call, instead of failing.
+- You can change either advisor's model, or turn automatic asking off, in **Settings → Advisors**.
+
 ## Saving chats to Google Drive
 
 By default, chats are saved only in your browser. To keep them in your own Google Drive instead, click **Saved in this browser** at the bottom of the sidebar (or open **Settings → Chat storage**) and follow the steps:
@@ -126,7 +189,7 @@ Languages that aren't installed show as "(not installed)". You can still use **A
 
 Code runs as your user, with a fresh temporary folder for each run, a time limit (10 s by default; 20 s for Java), an output cap, and at most 2 runs at once. Everything the program started is killed when it finishes. Programs don't receive environment variables that look like secrets, such as `LLM_API_KEY` or `APP_PASSWORD`. **Programs are not otherwise sandboxed.** For real isolation, run Edean with Docker. The compose file also limits memory and process counts.
 
-The runner turns itself off if Edean is reachable from your network without `APP_PASSWORD`. Set `CODE_RUNNER=off` to disable it entirely.
+The runner turns itself off if Edean is reachable from your network while still using the default password. Set `CODE_RUNNER=off` to disable it entirely.
 
 ## Configuration
 
@@ -139,11 +202,13 @@ Copy `.env.example` to `.env` and adjust the settings, or pass them as environme
 | `DEFAULT_MODEL` | `qwen2.5-coder:7b`            | Model selected on first launch |
 | `PORT`          | `3000`                        | |
 | `HOST`          | `127.0.0.1`                   | Use `0.0.0.0` to reach Edean from other devices |
-| `APP_PASSWORD`  | *(empty)*                     | Turns on a login prompt (any username). **Set this before exposing Edean on a network.** |
 | `CODE_RUNNER`   | `auto`                        | `auto`: the runner is on unless Edean is reachable from the network without a password. `on` or `off` force it either way |
 | `RUN_TIMEOUT_MS` | `10000`                      | Time limit for each program run (`COMPILE_TIMEOUT_MS` defaults to 30000) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | *(empty)* | Your Google OAuth client for Drive storage (or paste them in the app) |
-| `EDEAN_DATA_DIR` | `~/.edean`                   | Where the Google Drive connection is stored |
+| `EDEAN_DATA_DIR` | `~/.edean`                   | Where Edean keeps its settings: password hash, Google Drive and GitHub connections, advisor keys |
+| `APP_PASSWORD`  | *(empty → `0000` until you change it)* | Fixes the login password |
+| `ANTHROPIC_API_KEY` | *(empty)*                 | Claude advisor key (or paste it in Settings) |
+| `EDEAN_GITHUB_TOKEN` | *(empty)*                | GitHub token for the Workspace (or paste it in the app) |
 
 The executable reads these from `edean.env` next to it. When running from source, Edean reads them from `.env`.
 
@@ -168,6 +233,9 @@ launcher.js         What the executable runs: loads settings, starts the AI engi
 server.js           Node server: static files, /api/models, /api/chat relay, /api/run, /api/setup
 runner.js           Compiles and runs programs with time and output limits
 toolchains.js       Detects Ollama and the compilers (runs them, so broken stubs don't count)
+auth.js             Login screen, sessions, password changes
+github.js           GitHub API for the Workspace (repos, branches, files, commits, PRs, dependencies)
+advisors.js         Claude (Anthropic SDK) and Copilot (GitHub Models) advisors
 drive.js            Google Drive chat storage (OAuth sign-in, folder, save/load/delete chats)
 setup.js            System check + one-click installer (winget / Homebrew / apt / dnf / pacman, model download)
 scripts/build-exe.mjs  Packs everything into one executable (Node single-executable app)
@@ -176,6 +244,7 @@ public/app.js       Chat view, settings, view switching
 public/compiler.js  Compiler tab: editor, Run, Advice and the Notepad
 public/systems.js   Systems check panel
 public/drive.js     Chat storage / Google Drive panel
+public/workspace.js VS Code-style Workspace (Monaco editor, explorer, source control, AI panel)
 public/lib.js       Shared helpers: markdown and code rendering, streaming, storage
 public/prompts.js   System prompt, modes, advice prompt, starter programs
 public/styles.css   HUD theme (dark blue) and light theme

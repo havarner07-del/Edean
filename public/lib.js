@@ -69,11 +69,28 @@ export function splitThinking(content) {
   return { thinking: m[1].trim(), answer: content.slice(m[0].length), thinkingDone: m[2] === '</think>' };
 }
 
-// Render an assistant reply (reasoning + answer) into HTML.
-export function renderReply({ content = '', reasoning = '', pending = false, error = '' }, opts) {
+export const ADVISOR_NAMES = { claude: 'Claude', copilot: 'Copilot' };
+
+function renderConsults(consults = [], opts) {
+  return consults.map((c) => {
+    const who = ADVISOR_NAMES[c.advisor] || c.advisor;
+    const label = c.pending ? `Asking ${who}…` : c.error ? `${who} couldn't answer` : `${c.review ? 'Second opinion from' : 'Asked'} ${who}`;
+    const cost = c.usage ? `${c.usage.input + c.usage.output} tokens` : '';
+    const body = c.pending ? '<div class="typing"><span></span><span></span><span></span></div>'
+      : c.error ? `<div class="error">${escapeHtml(c.error)}</div>` : renderMarkdown(c.answer, opts);
+    return `<details class="consult${c.pending ? ' pending' : ''}"${c.review && !c.pending ? ' open' : ''}>` +
+      `<summary><span class="consult-who">${escapeHtml(label)}</span>` +
+      `<span class="consult-q">${escapeHtml(c.review ? 'Is this answer right?' : c.question)}</span>` +
+      `${cost ? `<span class="consult-cost" title="${escapeHtml(c.model || '')}">${cost}</span>` : ''}</summary>` +
+      `<div class="consult-body">${body}</div></details>`;
+  }).join('');
+}
+
+// Render an assistant reply (advisor consults + reasoning + answer) into HTML.
+export function renderReply({ content = '', reasoning = '', pending = false, error = '', consults }, opts) {
   const { thinking, answer, thinkingDone } = splitThinking(content);
   const allReasoning = [reasoning, thinking].filter(Boolean).join('\n\n');
-  let html = '';
+  let html = renderConsults(consults, opts);
   if (allReasoning) {
     const open = pending && !answer.trim() ? ' open' : '';
     html += `<details class="thinking"${open}><summary>${pending && !thinkingDone ? 'Thinking…' : 'Reasoning'}</summary>${renderMarkdown(allReasoning, opts)}</details>`;
@@ -117,6 +134,91 @@ export async function streamChat({ messages, model, temperature, maxTokens, sign
       const reasoning = delta.reasoning_content || delta.reasoning || '';
       if (reasoning || delta.content) onDelta({ content: delta.content || '', reasoning });
     }
+  }
+}
+
+// ---------- advisors ----------
+// The local model may write "ASK(claude): question" on its own line when it's unsure.
+const ASK_LINE = /(^|\n)[ \t]*ASK\((claude|copilot)\):[ \t]*(.+?)[ \t]*(\n|$)/;
+
+export function advisorInstructions(status) {
+  if (!status?.auto) return '';
+  const lines = [];
+  if (status.claude?.configured) lines.push('- claude: the strongest reasoning; best for hard bugs, tricky algorithms and design trade-offs');
+  if (status.copilot?.configured) lines.push('- copilot: a GitHub-hosted model; good for library, framework and API usage questions');
+  if (!lines.length) return '';
+  return `Advisors: if you are genuinely unsure about something specific (roughly under 90% confident) — an API detail, a tricky bug, a design choice — do not guess. Ask an advisor by writing ONE line on its own:
+ASK(<advisor>): <a short, self-contained question with only the essential code or error text>
+Then stop writing. You'll get the answer and then finish your reply. Questions cost money, so ask at most once or twice per reply, only when it matters, and never about things you already know. Available advisors:
+${lines.join('\n')}`;
+}
+
+export async function askAdvisor(advisor, question, signal) {
+  const r = await fetch('/api/advisors/ask', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ advisor, question }), signal,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `Advisor request failed (${r.status})`);
+  return data;
+}
+
+// Streams a reply from the local model. If it asks an advisor, pauses, asks, feeds the
+// answer back and lets the local model finish. `msg` gets content/reasoning/consults filled in.
+export async function streamWithAdvisors({ messages, msg, advisorStatus, signal, onUpdate, ...params }) {
+  const enabled = (a) => advisorStatus?.auto && advisorStatus[a]?.configured;
+  const convo = [...messages];
+  msg.consults ||= [];
+  let before = '';
+  for (let round = 0; ; round++) {
+    const roundCtl = new AbortController();
+    const stop = () => roundCtl.abort();
+    signal?.addEventListener('abort', stop);
+    let text = '';
+    let ask = null;
+    try {
+      await streamChat({
+        ...params, messages: convo, signal: roundCtl.signal,
+        onDelta: ({ content, reasoning }) => {
+          text += content;
+          msg.reasoning = (msg.reasoning || '') + reasoning;
+          const m = text.match(ASK_LINE);
+          if (m && m[4] === '\n' && round < 2 && enabled(m[2])) { ask = m; roundCtl.abort(); return; }
+          // Don't show a half-written ASK line while it streams.
+          msg.content = before + text.replace(/(^|\n)[ \t]*ASK\([^\n]*$/, '$1');
+          onUpdate?.();
+        },
+      });
+    } catch (e) {
+      if (!(ask && e.name === 'AbortError')) throw e;
+    } finally {
+      signal?.removeEventListener('abort', stop);
+    }
+    if (!ask) {
+      const m = text.match(ASK_LINE);
+      if (m && round < 2 && enabled(m[2])) ask = m;
+    }
+    if (!ask) { msg.content = before + text; onUpdate?.(); return; }
+
+    const [, , advisor, question] = ask;
+    const lead = text.slice(0, ask.index).trimEnd();
+    before += lead ? `${lead}\n\n` : '';
+    msg.content = before;
+    const consult = { advisor, question, pending: true };
+    msg.consults.push(consult);
+    onUpdate?.();
+    let note;
+    try {
+      const res = await askAdvisor(advisor, question, signal);
+      Object.assign(consult, { answer: res.answer, usage: res.usage, model: res.model });
+      note = `Answer from ${ADVISOR_NAMES[advisor]}:\n${res.answer}\n\nNow continue your reply to my original request using this. Don't repeat the question or ask it again.`;
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      consult.error = e.message;
+      note = `The advisor couldn't be reached (${e.message}). Continue with your best answer and say clearly what you're unsure about.`;
+    }
+    delete consult.pending;
+    onUpdate?.();
+    convo.push({ role: 'assistant', content: `${lead}\nASK(${advisor}): ${question}`.trim() }, { role: 'user', content: note });
   }
 }
 

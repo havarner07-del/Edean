@@ -31,6 +31,7 @@ before(async () => {
   await new Promise((r) => fake.listen(0, '127.0.0.1', r));
   process.env.LLM_BASE_URL = `http://127.0.0.1:${fake.address().port}/v1`;
   process.env.APP_PASSWORD = 'secret';
+  process.env.EDEAN_DATA_DIR = (await import('node:fs')).mkdtempSync((await import('node:path')).join((await import('node:os')).tmpdir(), 'edean-test-'));
   mod = await import('../server.js');
   server = mod.createServer();
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
@@ -40,12 +41,28 @@ before(async () => {
 after(() => { server.close(); fake.close(); });
 
 const auth = { Authorization: 'Basic ' + Buffer.from('me:secret').toString('base64') };
+// With no APP_PASSWORD and no saved password, the default password is 0000.
+const defaultAuth = { Authorization: 'Basic ' + Buffer.from('me:0000').toString('base64') };
 
-test('requires the app password when one is set', async () => {
-  const r = await fetch(`${base}/api/health`);
-  assert.equal(r.status, 401);
-  const ok = await fetch(`${base}/api/health`, { headers: auth });
-  assert.equal(ok.status, 200);
+test('requires signing in', async () => {
+  assert.equal((await fetch(`${base}/api/models`)).status, 401);
+  const page = await fetch(`${base}/`, { redirect: 'manual' });
+  assert.equal(page.status, 302);
+  assert.equal(page.headers.get('location'), '/login');
+  assert.equal((await fetch(`${base}/api/health`)).status, 200);
+  assert.equal((await fetch(`${base}/api/models`, { headers: auth })).status, 200);
+});
+
+test('login form sets a session cookie; wrong passwords are rejected', async () => {
+  const bad = await fetch(`${base}/login`, { method: 'POST', body: 'password=nope', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, redirect: 'manual' });
+  assert.equal(bad.status, 401);
+  const good = await fetch(`${base}/login`, { method: 'POST', body: 'password=secret', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, redirect: 'manual' });
+  assert.equal(good.status, 303);
+  const cookie = good.headers.get('set-cookie').split(';')[0];
+  assert.match(good.headers.get('set-cookie'), /HttpOnly/);
+  assert.equal((await fetch(`${base}/api/models`, { headers: { cookie } })).status, 200);
+  await fetch(`${base}/api/logout`, { method: 'POST', headers: { cookie } });
+  assert.equal((await fetch(`${base}/api/models`, { headers: { cookie } })).status, 401);
 });
 
 test('serves the app and vendored libraries locally', async () => {
@@ -143,9 +160,10 @@ test('refuses to run code when reachable from the network without a password', a
   const saved = { host: mod.config.host, appPassword: mod.config.appPassword };
   Object.assign(mod.config, { host: '0.0.0.0', appPassword: '' });
   try {
-    const langs = await (await fetch(`${base}/api/run/languages`)).json();
+    const langs = await (await fetch(`${base}/api/run/languages`, { headers: defaultAuth })).json();
     assert.equal(langs.enabled, false);
-    assert.equal((await run({ language: 'javascript', code: 'console.log(1)' })).status, 403);
+    const r = await fetch(`${base}/api/run`, { method: 'POST', headers: defaultAuth, body: JSON.stringify({ language: 'javascript', code: 'console.log(1)' }) });
+    assert.equal(r.status, 403);
   } finally {
     Object.assign(mod.config, saved);
   }
@@ -168,7 +186,7 @@ test('refuses to install when reachable from the network without a password', as
   const saved = { host: mod.config.host, appPassword: mod.config.appPassword };
   Object.assign(mod.config, { host: '0.0.0.0', appPassword: '' });
   try {
-    const r = await fetch(`${base}/api/setup/install`, { method: 'POST', body: '{}' });
+    const r = await fetch(`${base}/api/setup/install`, { method: 'POST', body: '{}', headers: defaultAuth });
     assert.equal(r.status, 403);
   } finally {
     Object.assign(mod.config, saved);

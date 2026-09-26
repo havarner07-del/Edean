@@ -1,14 +1,29 @@
-import { $, store, uid, escapeHtml, LANG_FROM_EXT, renderMarkdown, renderReply, streamChat, downloadText, copyText, handleCodeAction } from '/lib.js';
+import {
+  $, store, uid, escapeHtml, LANG_FROM_EXT, renderMarkdown, renderReply, streamWithAdvisors, advisorInstructions, askAdvisor,
+  downloadText, copyText, handleCodeAction,
+} from '/lib.js';
 import { BASE_SYSTEM_PROMPT, MODES, STARTERS } from '/prompts.js';
 import { initCompiler } from '/compiler.js';
 import { initSystems } from '/systems.js';
 import { initDrive, driveApi } from '/drive.js';
+import { initWorkspace } from '/workspace.js';
+
+// If the session expires, go back to the login screen.
+{
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const res = await realFetch(...args);
+    const url = String(args[0]?.url || args[0]);
+    if (res.status === 401 && res.headers.get('X-Edean-Auth') === 'required' && url.startsWith('/api/')) location.href = '/login';
+    return res;
+  };
+}
 
 const els = {
   sidebar: $('sidebar'), scrim: $('scrim'), menuBtn: $('menu-btn'),
   newChat: $('new-chat'), search: $('search'), chatList: $('chat-list'),
   modelSelect: $('model-select'), statusDot: $('status-dot'), modes: $('modes'),
-  viewTabs: document.querySelectorAll('.view-tab'), chatView: $('chat-view'), compilerView: $('compiler'),
+  viewTabs: document.querySelectorAll('.view-tab'), chatView: $('chat-view'), compilerView: $('compiler'), workspaceView: $('workspace'),
   messages: $('messages'), composer: $('composer'), input: $('input'), sendBtn: $('send-btn'),
   attachBtn: $('attach-btn'), fileInput: $('file-input'), attachments: $('attachments'),
   settings: $('settings'), openSettings: $('open-settings'), setSystem: $('set-system'),
@@ -141,23 +156,31 @@ window.addEventListener('beforeunload', (e) => {
 const currentChat = () => chats.find((c) => c.id === currentId) || null;
 
 const compiler = initCompiler({ settings, onOpen: () => setView('compiler') });
+const workspace = initWorkspace({
+  settings,
+  getAdvisorStatus: () => advisorStatus,
+  onOpenInCompiler: (code, lang) => compiler.open(code, lang),
+});
 // After installing things, refresh the model list and the compiler's languages.
 initSystems({ onChange: () => { loadModels(); compiler.refreshLanguages(); } });
 
 // ---------- views ----------
 function setView(view) {
-  settings.view = view === 'compiler' ? 'compiler' : 'chat';
+  settings.view = ['compiler', 'workspace'].includes(view) ? view : 'chat';
   saveSettings();
   const isChat = settings.view === 'chat';
   els.chatView.hidden = !isChat;
-  els.compilerView.hidden = isChat;
+  els.compilerView.hidden = settings.view !== 'compiler';
+  els.workspaceView.hidden = settings.view !== 'workspace';
+  document.body.classList.toggle('ws-mode', settings.view === 'workspace');
   els.modes.hidden = !isChat;
+  if (settings.view === 'workspace') workspace.show();
   for (const tab of els.viewTabs) {
     const active = tab.dataset.view === settings.view;
     tab.classList.toggle('active', active);
     tab.setAttribute('aria-selected', String(active));
   }
-  if (isChat) els.input.focus(); else compiler.focus();
+  if (isChat) els.input.focus(); else if (settings.view === 'compiler') compiler.focus();
 }
 
 // ---------- UI rendering ----------
@@ -267,6 +290,10 @@ function messageEl(msg, index, chat) {
   add('Copy', 'copy-msg');
   if (msg.role === 'user') add('Edit', 'edit-msg');
   if (msg.role === 'assistant' && index === chat.messages.length - 1) add('Regenerate', 'regen');
+  if (msg.role === 'assistant' && msg.content && !msg.pending) {
+    if (advisorStatus?.claude?.configured) add('Ask Claude', 'review-claude');
+    if (advisorStatus?.copilot?.configured) add('Ask Copilot', 'review-copilot');
+  }
   if (msg.model) {
     const tag = document.createElement('span');
     tag.className = 'model-tag';
@@ -350,9 +377,15 @@ async function loadModels() {
 }
 
 // ---------- chatting ----------
+let advisorStatus = null;
+async function loadAdvisors() {
+  try { advisorStatus = await (await fetch('/api/advisors')).json(); } catch { advisorStatus = null; }
+  return advisorStatus;
+}
+
 function buildSystemPrompt() {
   const mode = MODES.find((m) => m.id === settings.mode);
-  return [settings.systemPrompt || BASE_SYSTEM_PROMPT, mode?.prompt].filter(Boolean).join('\n\n');
+  return [settings.systemPrompt || BASE_SYSTEM_PROMPT, mode?.prompt, advisorInstructions(advisorStatus)].filter(Boolean).join('\n\n');
 }
 
 function composeUserMessage(text) {
@@ -411,13 +444,15 @@ async function generate(chat) {
   };
 
   try {
-    await streamChat({
+    await streamWithAdvisors({
       model: settings.model,
       temperature: settings.temperature,
       maxTokens: settings.maxTokens,
       messages: [{ role: 'system', content: buildSystemPrompt() }, ...history],
+      msg,
+      advisorStatus,
       signal: controller.signal,
-      onDelta: ({ content, reasoning }) => { msg.content += content; msg.reasoning += reasoning; repaint(); },
+      onUpdate: repaint,
     });
   } catch (e) {
     if (e.name !== 'AbortError') msg.error = e.message || String(e);
@@ -425,6 +460,8 @@ async function generate(chat) {
     if (frame) cancelAnimationFrame(frame);
     delete msg.pending;
     if (!msg.reasoning) delete msg.reasoning;
+    for (const c of msg.consults || []) if (c.pending) { delete c.pending; c.error = 'Stopped.'; }
+    if (!msg.consults?.length) delete msg.consults;
     if (!msg.content && !msg.error && controller.signal.aborted) msg.content = '_Stopped._';
     streaming = null;
     chat.updatedAt = Date.now();
@@ -436,6 +473,30 @@ async function generate(chat) {
 }
 
 function stopStreaming() { streaming?.controller.abort(); }
+
+// Ask Claude or Copilot to check a local answer. Only the question and the answer are sent.
+async function secondOpinion(chat, index, advisor) {
+  const msg = chat.messages[index];
+  const question = chat.messages.slice(0, index).reverse().find((m) => m.role === 'user');
+  const clip = (t, n) => (t.length > n ? `${t.slice(0, n)}\n[truncated]` : t);
+  const consult = { advisor, review: true, question: 'Is this answer right?', pending: true };
+  (msg.consults ||= []).push(consult);
+  renderMessages();
+  try {
+    const res = await askAdvisor(advisor, [
+      'A user asked a local coding model:', '---', clip(question?.display ?? question?.content ?? '', 4000), '---', '',
+      'The local model answered:', '---', clip(msg.content, 8000), '---', '',
+      'Is this answer correct and complete? If it is, say so in one line. Otherwise list the mistakes and give the corrected code or explanation, as briefly as possible.',
+    ].join('\n'));
+    Object.assign(consult, { answer: res.answer, usage: res.usage, model: res.model });
+  } catch (e) {
+    consult.error = e.message;
+  }
+  delete consult.pending;
+  chat.updatedAt = Date.now();
+  saveChats();
+  if (currentId === chat.id) renderMessages();
+}
 
 // ---------- events ----------
 function autosize() {
@@ -454,6 +515,7 @@ els.messages.addEventListener('click', (e) => {
   const msg = chat.messages[index];
   if (action === 'copy-msg') return copyText(msg.content, b);
   if (streaming) return;
+  if (action === 'review-claude' || action === 'review-copilot') return secondOpinion(chat, index, action.slice(7));
   if (action === 'regen') {
     chat.messages.splice(index, 1);
     generate(chat);
@@ -506,6 +568,8 @@ els.menuBtn.onclick = () => document.body.classList.toggle('sidebar-open');
 els.scrim.onclick = closeSidebar;
 
 els.openSettings.onclick = () => {
+  refreshAccount();
+  loadAdvisors().then(fillAdvisorSettings);
   els.setSystem.value = settings.systemPrompt;
   els.setTemp.value = settings.temperature;
   els.tempOut.textContent = settings.temperature;
@@ -533,6 +597,55 @@ els.deleteAll.onclick = async () => {
   for (const id of ids) await removeChatFromStorage(id);
 };
 
+// ---------- account ----------
+async function refreshAccount() {
+  try {
+    const a = await (await fetch('/api/account')).json();
+    $('password-note').textContent = a.passwordFromEnv ? 'The password is set with APP_PASSWORD in your settings file.'
+      : a.customPassword ? '' : 'You are still using the default password 0000. Choose your own below.';
+    $('change-password').disabled = a.passwordFromEnv;
+  } catch { /* offline */ }
+}
+$('change-password').onclick = async () => {
+  const status = $('pw-status');
+  const r = await fetch('/api/password', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current: $('pw-current').value, next: $('pw-next').value }),
+  });
+  const data = await r.json().catch(() => ({}));
+  status.textContent = r.ok ? 'Password changed.' : data.error || 'Could not change the password.';
+  status.className = `pw-status ${r.ok ? 'ok' : 'err'}`;
+  if (r.ok) { $('pw-current').value = ''; $('pw-next').value = ''; refreshAccount(); }
+};
+function fillAdvisorSettings() {
+  const a = advisorStatus;
+  if (!a) return;
+  $('adv-auto').checked = a.auto;
+  $('adv-key').value = '';
+  $('adv-key').placeholder = a.claude.configured ? (a.claude.keyFromEnv ? 'Set by ANTHROPIC_API_KEY' : 'Saved — type a new key to replace it') : 'sk-ant-…';
+  $('adv-claude-model').value = a.claude.model;
+  $('adv-copilot-model').value = a.copilot.model;
+  $('adv-status').textContent = `Claude: ${a.claude.configured ? 'ready' : 'needs an API key'} · Copilot: ${a.copilot.configured ? 'ready' : 'connect GitHub in the Workspace'}`;
+  $('adv-status').className = 'pw-status';
+}
+$('adv-save').onclick = async () => {
+  const body = { auto: $('adv-auto').checked, claudeModel: $('adv-claude-model').value, copilotModel: $('adv-copilot-model').value };
+  if ($('adv-key').value.trim()) body.anthropicKey = $('adv-key').value.trim();
+  const r = await fetch('/api/advisors/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { $('adv-status').textContent = data.error || 'Could not save.'; $('adv-status').className = 'pw-status err'; return; }
+  advisorStatus = data;
+  fillAdvisorSettings();
+  $('adv-status').textContent = `Saved. ${$('adv-status').textContent}`;
+  $('adv-status').className = 'pw-status ok';
+  renderMessages();
+};
+$('sign-out').onclick = async () => {
+  await syncToDrive();
+  await fetch('/api/logout', { method: 'POST' });
+  location.href = '/login';
+};
+
 const drivePanel = initDrive({ beforeChange: syncToDrive });
 els.storageBtn.onclick = () => drivePanel.open();
 els.storageDrive.onclick = () => { els.settings.close(); drivePanel.open(); };
@@ -555,3 +668,4 @@ renderAll();
 setView(settings.view);
 loadModels();
 initStorage();
+loadAdvisors().then(() => renderMessages());

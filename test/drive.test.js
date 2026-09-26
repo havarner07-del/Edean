@@ -93,7 +93,8 @@ before(async () => {
 after(() => { server.close(); google.close(); fs.rmSync(dataDir, { recursive: true, force: true }); });
 
 const call = async (p, opts = {}) => {
-  const r = await fetch(base + p, { redirect: 'manual', ...opts, headers: opts.body ? { 'Content-Type': 'application/json' } : {} });
+  const headers = { Authorization: 'Basic ' + Buffer.from('me:0000').toString('base64'), ...(opts.body ? { 'Content-Type': 'application/json' } : {}) };
+  const r = await fetch(base + p, { redirect: 'manual', ...opts, headers });
   return { status: r.status, location: r.headers.get('location'), data: await r.json().catch(() => null) };
 };
 

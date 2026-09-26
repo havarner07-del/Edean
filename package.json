@@ -16,9 +16,11 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@highlightjs/cdn-assets": "^11.11.1",
     "dompurify": "^3.4.16",
-    "marked": "^18.0.14"
+    "marked": "^18.0.14",
+    "monaco-editor": "^0.57.0"
   },
   "license": "MIT",
   "devDependencies": {

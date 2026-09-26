@@ -35,13 +35,19 @@ await build({
 });
 
 // 2. Embed the web app, libraries and fonts as assets.
-const { STATIC } = await import('../server.js');
+const { STATIC, MONACO_DIR } = await import('../server.js');
 const assets = {};
 for (const [, [rel]] of Object.entries(STATIC)) {
   const file = path.join(ROOT, rel);
   if (!fs.existsSync(file)) throw new Error(`Missing ${rel} — run npm install first.`);
   assets[rel] = file;
 }
+// Monaco (the Workspace editor) is a whole folder of files.
+const walk = (dir) => fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((d) => {
+  const rel = `${dir}/${d.name}`;
+  return d.isDirectory() ? walk(rel) : [rel];
+});
+for (const rel of walk(MONACO_DIR)) assets[rel] = path.join(ROOT, rel);
 const seaConfig = path.join(DIST, 'sea-config.json');
 fs.writeFileSync(seaConfig, JSON.stringify({
   main: path.join(DIST, 'edean.cjs'),
