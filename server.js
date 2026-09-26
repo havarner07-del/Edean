@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { listLanguages, runCode } from './runner.js';
 import { getStatus, startInstall, installLog, startOllama } from './setup.js';
 import { isSea } from './toolchains.js';
+import * as drive from './drive.js';
 
 // import.meta.url is undefined once bundled into the Edean executable.
 const HERE = typeof import.meta.url === 'string' ? fileURLToPath(import.meta.url) : '';
@@ -38,6 +39,7 @@ export const STATIC = {
   '/lib.js': ['public/lib.js', JS],
   '/compiler.js': ['public/compiler.js', JS],
   '/systems.js': ['public/systems.js', JS],
+  '/drive.js': ['public/drive.js', JS],
   '/styles.css': ['public/styles.css', CSS],
   '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
   // Libraries are served from node_modules so the browser never calls a CDN.
@@ -202,6 +204,49 @@ async function handleRun(req, res) {
   }
 }
 
+// Google Drive chat storage. Tokens stay on this server; the browser only sees chats.
+async function handleDrive(req, res, pathname) {
+  const blocked = setupBlockedReason();
+  if (blocked) return sendJson(res, 403, { error: blocked.replace('Installing is', 'Google Drive is') });
+  const url = new URL(req.url, 'http://x');
+  const method = req.method;
+  const body = async () => { try { return JSON.parse((await readBody(req)) || '{}'); } catch { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); } };
+  try {
+    if (pathname === '/api/drive/status' && method === 'GET') return sendJson(res, 200, await drive.driveStatus());
+    if (pathname === '/api/drive/credentials' && method === 'POST') {
+      await drive.setCredentials(await body());
+      return sendJson(res, 200, await drive.driveStatus());
+    }
+    if (pathname === '/api/drive/auth' && method === 'GET') {
+      // Google only redirects desktop-app sign-ins back to loopback addresses.
+      const host = req.headers.host || '';
+      if (!/^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(host)) {
+        return send(res, 400, 'Open Edean at http://127.0.0.1 on this computer to connect Google Drive.', { 'Content-Type': 'text/plain; charset=utf-8' });
+      }
+      const target = await drive.authUrl(`http://${host}/api/drive/callback`);
+      return send(res, 302, '', { Location: target, 'Cache-Control': 'no-store' });
+    }
+    if (pathname === '/api/drive/callback' && method === 'GET') {
+      try {
+        await drive.handleCallback(Object.fromEntries(url.searchParams));
+        return send(res, 302, '', { Location: '/?drive=connected' });
+      } catch (err) {
+        return send(res, 302, '', { Location: `/?drive=error&message=${encodeURIComponent(err.message)}` });
+      }
+    }
+    if (pathname === '/api/drive/disconnect' && method === 'POST') { await drive.disconnect(); return sendJson(res, 200, { ok: true }); }
+    if (pathname === '/api/drive/folders' && method === 'GET') return sendJson(res, 200, { folders: await drive.listFolders() });
+    if (pathname === '/api/drive/folder' && method === 'POST') return sendJson(res, 200, { folder: await drive.chooseFolder(await body()) });
+    if (pathname === '/api/drive/chats' && method === 'GET') return sendJson(res, 200, { chats: await drive.listChats() });
+    const m = pathname.match(/^\/api\/drive\/chats\/([\w-]{1,64})$/);
+    if (m && method === 'PUT') { await drive.saveChat(m[1], await body()); return sendJson(res, 200, { ok: true }); }
+    if (m && method === 'DELETE') { await drive.deleteChat(m[1]); return sendJson(res, 200, { ok: true }); }
+    return sendJson(res, 404, { error: 'Not found' });
+  } catch (err) {
+    return sendJson(res, err.status || 500, { error: err.status ? err.message : `Google Drive request failed: ${err.message}` });
+  }
+}
+
 async function handleModels(res) {
   try {
     const r = await fetch(`${config.llmBaseUrl}/models`, { headers: upstreamHeaders(), signal: AbortSignal.timeout(8000) });
@@ -278,6 +323,7 @@ export function createServer() {
     try {
       if (pathname === '/api/health') return sendJson(res, 200, { ok: true, app: 'edean' });
       if (pathname.startsWith('/api/setup/')) return await handleSetup(req, res, pathname);
+      if (pathname.startsWith('/api/drive/')) return await handleDrive(req, res, pathname);
       if (pathname === '/api/models' && req.method === 'GET') return await handleModels(res);
       if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
       if (pathname === '/api/run/languages' && req.method === 'GET') return await handleLanguages(req, res);

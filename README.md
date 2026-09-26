@@ -8,6 +8,7 @@ Edean is a private chat app for your own coding AI. It works like Venice: you ge
 - **Built-in compiler.** Write and run **Python, JavaScript, TypeScript, Java, C, C++, Go, Rust, Ruby, PHP and Bash**, then press **Advice**. Your model reviews the code, including the output or error from your last run, and writes its notes on a **Notepad** beside the editor.
 - **Works with any local model server** that has an OpenAI-compatible API, such as Ollama, LM Studio, llama.cpp or vLLM.
 - **Handles "thinking" models.** Output inside `<think>` tags and reasoning fields (Qwen3, DeepSeek-R1) is shown in a collapsible "Reasoning" section.
+- **Save chats to Google Drive.** Connect your Google account and pick a folder. Chats are then saved there as files instead of on your computer.
 - **Desktop executable with a System Check.** Double-click Edean to start it. It shows a green or red light for everything it needs (the AI engine, a coding model, each compiler), and an **Install all missing** button that sets up whatever is missing.
 - A dark-blue HUD theme, plus streaming responses, a Stop button, Regenerate, message editing, chat search, and chat export and delete. The layout also works on mobile.
 
@@ -68,6 +69,32 @@ Choose by how much memory your GPU has (VRAM), or your RAM if you don't have a G
 
 Every model you have pulled appears in the model menu at the top of the app. Newer coding models come out regularly, so check the Ollama library for the latest ones.
 
+## Saving chats to Google Drive
+
+By default, chats are saved only in your browser. To keep them in your own Google Drive instead, click **Saved in this browser** at the bottom of the sidebar (or open **Settings → Chat storage**) and follow the steps:
+
+1. **One-time Google setup (about 5 minutes).** Google requires every app that uses Drive to have an OAuth client, and this one belongs to you:
+   - Create a project in the [Google Cloud Console](https://console.cloud.google.com/projectcreate).
+   - Turn on the **Google Drive API** for it.
+   - In **Google Auth Platform**, choose **External** and add your Google address as a **test user**.
+   - Create a client of type **Desktop app**, then paste its Client ID and secret into Edean. They're stored only on your computer.
+2. **Sign in with Google.** Google warns that the app "hasn't been verified". That's expected for your own private app, so click **Continue**.
+3. **Pick a folder.** Name a new folder (default "Edean Chats"), or reuse one Edean made before.
+
+After that:
+- Each chat is saved to that folder as a `.json` file named like `2026-09-26 My chat title.json`, which you can download from Drive.
+- Changes save automatically a second or two after each message. The sidebar shows **All chats saved**, **Saving…** or **Not saved — retrying**.
+- Deleted chats go to Drive's trash.
+- If you already had chats in the browser, Edean offers to move them to Drive and then removes them from this computer.
+- Only chats go to Drive. Your settings, compiler code and notepad notes stay in the browser.
+
+**Privacy:**
+- Edean asks only for the `drive.file` permission, so it can see and change only the files and folders it created, nothing else in your Drive. (That's also why you can reuse only folders Edean made. You can still move or rename that folder in Drive afterwards.)
+- The sign-in token is kept in `~/.edean/google-drive.json`, readable only by your user account. Your browser never receives it.
+- **Disconnect** revokes Edean's access. Your chats stay in the Drive folder.
+
+While your Google app is in "Testing" mode, Google expires the sign-in after 7 days. Edean then asks you to sign in again, and your chats remain safe in Drive. To avoid this, click **Publish app** on the Google Auth Platform **Audience** page. For a personal app, Google doesn't require a review.
+
 ## The Compiler tab
 
 Switch to **Compiler** at the top of the app.
@@ -115,6 +142,8 @@ Copy `.env.example` to `.env` and adjust the settings, or pass them as environme
 | `APP_PASSWORD`  | *(empty)*                     | Turns on a login prompt (any username). **Set this before exposing Edean on a network.** |
 | `CODE_RUNNER`   | `auto`                        | `auto`: the runner is on unless Edean is reachable from the network without a password. `on` or `off` force it either way |
 | `RUN_TIMEOUT_MS` | `10000`                      | Time limit for each program run (`COMPILE_TIMEOUT_MS` defaults to 30000) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | *(empty)* | Your Google OAuth client for Drive storage (or paste them in the app) |
+| `EDEAN_DATA_DIR` | `~/.edean`                   | Where the Google Drive connection is stored |
 
 The executable reads these from `edean.env` next to it. When running from source, Edean reads them from `.env`.
 
@@ -130,7 +159,7 @@ Browser (chats in localStorage) ──► Edean server (relay, no logs) ──�
                                           └─► code runner (temp folder, deleted after each run)
 ```
 
-The Edean server only relays each request to your model and streams the reply back. It does not save or log prompts, responses, or the code you run. All chat history lives in your browser. Clearing site data, or using **Settings → Delete all chats**, removes it. **Export all chats** saves your chats as a JSON backup.
+The Edean server only relays each request to your model and streams the reply back. It does not save or log prompts, responses, or the code you run. If you connect Google Drive, chats go straight from Edean to your own Drive folder and are not stored on this computer. All chat history lives in your browser. Clearing site data, or using **Settings → Delete all chats**, removes it. **Export all chats** saves your chats as a JSON backup.
 
 ## Project layout
 
@@ -139,12 +168,14 @@ launcher.js         What the executable runs: loads settings, starts the AI engi
 server.js           Node server: static files, /api/models, /api/chat relay, /api/run, /api/setup
 runner.js           Compiles and runs programs with time and output limits
 toolchains.js       Detects Ollama and the compilers (runs them, so broken stubs don't count)
+drive.js            Google Drive chat storage (OAuth sign-in, folder, save/load/delete chats)
 setup.js            System check + one-click installer (winget / Homebrew / apt / dnf / pacman, model download)
 scripts/build-exe.mjs  Packs everything into one executable (Node single-executable app)
 public/index.html   App shell
 public/app.js       Chat view, settings, view switching
 public/compiler.js  Compiler tab: editor, Run, Advice and the Notepad
 public/systems.js   Systems check panel
+public/drive.js     Chat storage / Google Drive panel
 public/lib.js       Shared helpers: markdown and code rendering, streaming, storage
 public/prompts.js   System prompt, modes, advice prompt, starter programs
 public/styles.css   HUD theme (dark blue) and light theme

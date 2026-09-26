@@ -2,6 +2,7 @@ import { $, store, uid, escapeHtml, LANG_FROM_EXT, renderMarkdown, renderReply, 
 import { BASE_SYSTEM_PROMPT, MODES, STARTERS } from '/prompts.js';
 import { initCompiler } from '/compiler.js';
 import { initSystems } from '/systems.js';
+import { initDrive, driveApi } from '/drive.js';
 
 const els = {
   sidebar: $('sidebar'), scrim: $('scrim'), menuBtn: $('menu-btn'),
@@ -13,19 +14,130 @@ const els = {
   settings: $('settings'), openSettings: $('open-settings'), setSystem: $('set-system'),
   resetSystem: $('reset-system'), setTemp: $('set-temp'), tempOut: $('temp-out'), setMax: $('set-max'),
   setTheme: $('set-theme'), exportChats: $('export-chats'), deleteAll: $('delete-all'),
+  storageBtn: $('storage-btn'), storageLabel: $('storage-label'), storageSub: $('storage-sub'), storageDrive: $('open-drive'),
 };
 
 const DEFAULT_SETTINGS = { systemPrompt: BASE_SYSTEM_PROMPT, temperature: 0.2, maxTokens: 8192, theme: 'dark', model: '', mode: 'build', view: 'chat' };
 const settings = { ...DEFAULT_SETTINGS, ...store.get('edean.settings', {}) };
 // The HUD redesign made dark the default; move older installs over once.
 if (!settings.hudTheme) { settings.theme = 'dark'; settings.hudTheme = true; }
+// Chats live either in this browser ("local") or in a Google Drive folder ("drive").
+let storage = { mode: 'local', loading: false, error: '', folder: null, email: '' };
 let chats = store.get('edean.chats', []);
 let currentId = store.get('edean.current', null);
 let pendingFiles = [];
 let streaming = null; // { controller, chatId }
 
 const saveSettings = () => store.set('edean.settings', settings);
-const saveChats = () => { store.set('edean.chats', chats); store.set('edean.current', currentId); };
+
+// ---------- chat storage ----------
+const synced = new Map(); // chat id -> JSON last saved to Drive
+let syncTimer = 0;
+let syncing = null;
+let syncState = 'idle'; // idle | saving | error
+let clearLocalAfterSync = false;
+
+function saveChats() {
+  store.set('edean.current', currentId);
+  if (storage.mode === 'local') { store.set('edean.chats', chats); return; }
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncToDrive, 1200);
+}
+
+const unsyncedChats = () => chats.filter((c) => !c.messages.some((m) => m.pending) && synced.get(c.id) !== JSON.stringify(c));
+
+async function syncToDrive() {
+  if (storage.mode !== 'drive' || storage.loading) return;
+  if (syncing) { await syncing; return syncToDrive(); }
+  clearTimeout(syncTimer);
+  const dirty = unsyncedChats();
+  if (!dirty.length) return;
+  syncing = (async () => {
+    syncState = 'saving';
+    renderStorage();
+    let failed = 0;
+    for (const chat of dirty) {
+      const snapshot = JSON.stringify(chat);
+      try {
+        await driveApi.saveChat(JSON.parse(snapshot));
+        synced.set(chat.id, snapshot);
+      } catch (e) {
+        failed++;
+        storage.error = e.message;
+      }
+    }
+    syncState = failed ? 'error' : 'idle';
+    if (!failed) {
+      storage.error = '';
+      if (clearLocalAfterSync) { store.set('edean.chats', []); clearLocalAfterSync = false; }
+    } else {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(syncToDrive, 15000); // keep retrying in the background
+    }
+    renderStorage();
+  })();
+  try { await syncing; } finally { syncing = null; }
+}
+
+async function removeChatFromStorage(id) {
+  synced.delete(id);
+  if (storage.mode === 'drive') {
+    try { await driveApi.deleteChat(id); } catch (e) { alert(`Could not delete the chat from Google Drive: ${e.message}`); }
+  }
+}
+
+function renderStorage() {
+  const drive = storage.mode === 'drive';
+  els.storageBtn.classList.toggle('drive', drive);
+  els.storageLabel.textContent = drive ? `Google Drive · ${storage.folder?.name || ''}` : 'Saved in this browser';
+  els.storageSub.textContent = !drive ? 'Connect Google Drive'
+    : storage.loading ? 'Loading chats…'
+      : syncState === 'saving' ? 'Saving…'
+        : syncState === 'error' || storage.error ? 'Not saved — retrying' : 'All chats saved';
+  els.storageBtn.classList.toggle('error', drive && (syncState === 'error' || !!storage.error));
+  els.storageBtn.title = storage.error || (drive ? `Chats are saved in Google Drive (${storage.email})` : 'Chats are stored only in this browser');
+}
+
+async function initStorage() {
+  let status;
+  try { status = await driveApi.status(); } catch { return; }
+  if (!status.connected || !status.folder) { renderStorage(); return; }
+  storage = { mode: 'drive', loading: true, error: '', folder: status.folder, email: status.email };
+  const localChats = chats;
+  chats = [];
+  renderStorage();
+  renderAll();
+  try {
+    chats = await driveApi.listChats();
+    for (const c of chats) {
+      for (const m of c.messages) if (m.pending) { delete m.pending; m.error = m.error || 'Interrupted.'; }
+      synced.set(c.id, JSON.stringify(c));
+    }
+  } catch (e) {
+    storage.error = `Couldn't load chats from Google Drive: ${e.message}`;
+  }
+  storage.loading = false;
+  if (!chats.some((c) => c.id === currentId)) currentId = null;
+  renderAll();
+  renderStorage();
+  // Offer to move chats that were saved in this browser before Drive was connected.
+  const toMove = localChats.filter((c) => !chats.some((d) => d.id === c.id));
+  if (!storage.error && toMove.length && confirm(`Move ${toMove.length} chat${toMove.length === 1 ? '' : 's'} saved in this browser to your Google Drive folder "${status.folder.name}"? They'll be removed from this computer once they're uploaded.`)) {
+    chats.push(...toMove);
+    clearLocalAfterSync = true;
+    renderAll();
+    await syncToDrive();
+  } else if (!toMove.length && localChats.length) {
+    store.set('edean.chats', []); // already in Drive
+  }
+}
+
+window.addEventListener('beforeunload', (e) => {
+  if (storage.mode === 'drive' && unsyncedChats().length) {
+    syncToDrive();
+    e.preventDefault();
+  }
+});
 const currentChat = () => chats.find((c) => c.id === currentId) || null;
 
 const compiler = initCompiler({ settings, onOpen: () => setView('compiler') });
@@ -79,7 +191,7 @@ function renderChatList() {
   if (!list.length) {
     const p = document.createElement('p');
     p.className = 'empty-list';
-    p.textContent = q ? 'No matching chats' : 'No chats yet';
+    p.textContent = storage.loading ? 'Loading chats from Google Drive…' : storage.error && storage.mode === 'drive' && !chats.length ? storage.error : q ? 'No matching chats' : 'No chats yet';
     els.chatList.appendChild(p);
   }
   for (const chat of list) {
@@ -100,6 +212,7 @@ function renderChatList() {
       if (streaming?.chatId === chat.id) stopStreaming();
       chats = chats.filter((c) => c.id !== chat.id);
       if (currentId === chat.id) currentId = null;
+      removeChatFromStorage(chat.id);
       saveChats(); renderAll();
     };
     row.append(open, del);
@@ -411,11 +524,26 @@ els.settings.addEventListener('close', () => {
   applyTheme();
 });
 els.exportChats.onclick = () => downloadText(`edean-chats-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(chats, null, 2), 'application/json');
-els.deleteAll.onclick = () => {
-  if (!confirm('Permanently delete every chat stored in this browser?')) return;
+els.deleteAll.onclick = async () => {
+  const where = storage.mode === 'drive' ? `in your Google Drive folder "${storage.folder?.name}" (they go to Drive's trash)` : 'in this browser';
+  if (!confirm(`Delete every chat ${where}?`)) return;
   stopStreaming();
+  const ids = chats.map((c) => c.id);
   chats = []; currentId = null; saveChats(); renderAll(); els.settings.close();
+  for (const id of ids) await removeChatFromStorage(id);
 };
+
+const drivePanel = initDrive({ beforeChange: syncToDrive });
+els.storageBtn.onclick = () => drivePanel.open();
+els.storageDrive.onclick = () => { els.settings.close(); drivePanel.open(); };
+// Coming back from Google sign-in.
+{
+  const params = new URLSearchParams(location.search);
+  if (params.has('drive')) {
+    history.replaceState(null, '', '/');
+    drivePanel.open(params.get('drive') === 'error' ? { text: params.get('message') || 'Google sign-in failed.', kind: 'err' } : null);
+  }
+}
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
 
 // ---------- boot ----------
@@ -426,3 +554,4 @@ renderModes();
 renderAll();
 setView(settings.view);
 loadModels();
+initStorage();

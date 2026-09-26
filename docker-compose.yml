@@ -29,6 +29,9 @@ services:
     ports:
       # Bound to localhost only. Change to "3000:3000" to expose on your network (set APP_PASSWORD first).
       - "127.0.0.1:3000:3000"
+    volumes:
+      # Keeps your Google Drive connection (not your chats) across restarts.
+      - edean-settings:/home/node/.edean
     # Limits for programs run from the Compiler tab.
     mem_limit: 2g
     pids_limit: 512
@@ -36,3 +39,4 @@ services:
 
 volumes:
   ollama:
+  edean-settings:
