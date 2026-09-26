@@ -125,6 +125,7 @@ export function loginPage(error = '') {
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="300">
 <title>Edean · Sign in</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>

@@ -34,6 +34,10 @@ export const config = {
 
 const JS = 'text/javascript; charset=utf-8';
 const CSS = 'text/css; charset=utf-8';
+// Set by the desktop launcher (Edean.exe): lets the app offer "Quit Edean" and lets
+// the launcher notice when no window has been open for a while.
+export const desktop = { enabled: false, quit: null, lastActivity: Date.now() };
+
 export const STATIC = {
   '/': ['public/index.html', 'text/html; charset=utf-8'],
   '/app.js': ['public/app.js', JS],
@@ -380,12 +384,20 @@ export function createServer() {
       // Public: health check, the login page and its icon.
       if (pathname === '/api/health') return sendJson(res, 200, { ok: true, app: 'edean' });
       if (pathname === '/favicon.svg') return serveStatic(req, res, pathname);
-      if (pathname === '/login') return await handleLogin(req, res, searchParams);
+      if (pathname === '/login') { desktop.lastActivity = Date.now(); return await handleLogin(req, res, searchParams); }
       if (!auth.isAuthenticated(req)) {
         if (pathname.startsWith('/api/')) {
           return send(res, 401, JSON.stringify({ error: 'Sign in required' }), { 'Content-Type': 'application/json', 'X-Edean-Auth': 'required' });
         }
         return send(res, 302, '', { Location: '/login', 'Cache-Control': 'no-store' });
+      }
+      desktop.lastActivity = Date.now();
+      if (pathname === '/api/ping') return sendJson(res, 200, { ok: true, desktop: desktop.enabled });
+      if (pathname === '/api/quit' && req.method === 'POST') {
+        if (!desktop.enabled || !desktop.quit) return sendJson(res, 400, { error: 'Edean is not running as the desktop app.' });
+        sendJson(res, 200, { ok: true });
+        setTimeout(desktop.quit, 200);
+        return;
       }
       if (pathname === '/api/logout' && req.method === 'POST') {
         return send(res, 200, JSON.stringify({ ok: true }), { 'Set-Cookie': auth.endSession(req), 'Content-Type': 'application/json' });

@@ -1,12 +1,16 @@
-name: Build executables
+name: Build Edean app
 
-# Builds Edean.exe (Windows), Edean (macOS) and edean (Linux).
-# Download them from the run's "Artifacts" section on the Actions tab.
+# Builds the double-clickable apps and publishes them on the "Edean (latest build)"
+# release: https://github.com/<owner>/<repo>/releases/tag/edean-latest
+#   Windows → Edean.exe   macOS → Edean-macos   Linux → edean-linux
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
     tags: ['v*']
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -15,14 +19,14 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            name: Edean-windows
             file: dist/Edean.exe
+            name: Edean.exe
           - os: macos-latest
-            name: Edean-macos
             file: dist/Edean
+            name: Edean-macos
           - os: ubuntu-latest
-            name: Edean-linux
             file: dist/edean
+            name: edean-linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -33,9 +37,28 @@ jobs:
       - run: npm test
         if: matrix.os == 'ubuntu-latest'
       - run: npm run build:exe
+      - name: Rename for download
+        shell: bash
+        run: mkdir -p out && cp "${{ matrix.file }}" "out/${{ matrix.name }}" && cp dist/edean.env.example out/
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: |
-            ${{ matrix.file }}
-            dist/edean.env.example
+          path: out/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish "Edean (latest build)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete edean-latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create edean-latest --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Edean (latest build)" \
+            --notes "Download **Edean.exe** (Windows), **Edean-macos** or **edean-linux** and double-click it. Built from ${GITHUB_REF_NAME} at ${GITHUB_SHA::7}. The first time, Windows may say it protected your PC: click *More info → Run anyway* (the app isn't code-signed)." \
+            artifacts/Edean.exe artifacts/Edean-macos artifacts/edean-linux artifacts/edean.env.example

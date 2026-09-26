@@ -15,17 +15,25 @@ Edean is a private chat app for your own coding AI. It works like Venice: you ge
 - **Desktop executable with a System Check.** Double-click Edean to start it. It shows a green or red light for everything it needs (the AI engine, a coding model, each compiler), and an **Install all missing** button that sets up whatever is missing.
 - A dark-blue HUD theme, plus streaming responses, a Stop button, Regenerate, message editing, chat search, and chat export and delete. The layout also works on mobile.
 
-## Quick start: the Edean app
+## Quick start: double-click Edean.exe
 
-1. Get the executable for your computer:
-   - **Download it:** open this repo's **Actions** tab, open the latest **Build executables** run, and download `Edean-windows`, `Edean-macos` or `Edean-linux` from **Artifacts**. You can also run the workflow yourself with **Run workflow**.
-   - **Or build it yourself** (needs Node.js 22+): `npm install && npm run build:exe` creates `dist/Edean.exe` on Windows, `dist/Edean` on macOS or `dist/edean` on Linux.
-2. Double-click it. A small window opens (keep it open while you use Edean), and Edean opens in your browser.
-3. The **Systems check** panel opens automatically if anything is missing:
+1. **Get `Edean.exe`.** Open this repository's [**Releases → Edean (latest build)**](../../releases/tag/edean-latest) and download **Edean.exe**. It's built automatically on every push, and there are also `Edean-macos` and `edean-linux` versions.
+2. **Double-click it.** Edean opens in its own app window. There's no browser tab, address bar or console window, and it has its own icon in the taskbar.
+3. **Sign in** with the password `0000`, then change it in **Settings → Password**.
+4. The **Systems check** panel opens if anything is missing:
    - 🟢 means ready and 🔴 means missing.
-   - Click **Install all missing** to install everything, or click **Install** on a single row. Progress appears live in the panel.
-   - The first run downloads the AI engine (Ollama) and a coding model, which is several GB.
-   - You can open the panel again at any time from **System check** at the bottom of the sidebar.
+   - **Install all missing** installs the AI engine (Ollama), downloads a coding model and sets up the compilers. The model download is several GB.
+
+A few things to know:
+- **Quitting:** close the Edean window, or use **Settings → Quit Edean**. Double-clicking `Edean.exe` while it's already running just opens another window.
+- **The window:** it's Microsoft Edge (built into Windows) or Google Chrome running in *app mode*, with a separate profile just for Edean. If neither is installed, Edean opens in your default browser instead, and quits after it has been closed for 15 minutes.
+- **The first launch:** Windows SmartScreen may say "Windows protected your PC", because the app isn't code-signed. Click **More info → Run anyway**.
+- **Settings:** put an `edean.env` file next to `Edean.exe` (start from `edean.env.example`).
+- **Problems:** check `%USERPROFILE%\.edean\edean.log`. Startup errors are also shown in a message box.
+
+**Build it yourself** (needs Node.js 22+): `npm install`, then either
+- `npm run build:exe` for your own computer, or
+- `npm run build:exe:win` to build `dist/Edean.exe` from any OS. This downloads the official Node.js for Windows and verifies it against its checksum.
 
 How the installer works on each system:
 

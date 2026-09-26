@@ -640,6 +640,22 @@ $('adv-save').onclick = async () => {
   $('adv-status').className = 'pw-status ok';
   renderMessages();
 };
+// Desktop app: tell Edean.exe this window is still open, and offer "Quit Edean".
+async function ping() {
+  try {
+    const r = await fetch('/api/ping');
+    if (r.ok) $('quit-app').hidden = !(await r.json()).desktop;
+  } catch { /* server stopped */ }
+}
+ping();
+setInterval(ping, 30000);
+$('quit-app').onclick = async () => {
+  if (!confirm('Quit Edean? This closes the app and stops its server.')) return;
+  await syncToDrive();
+  await fetch('/api/quit', { method: 'POST' });
+  document.body.innerHTML = '<p style="margin:40vh auto;text-align:center;color:#858891;font:15px system-ui">Edean has quit. You can close this window.</p>';
+  setTimeout(() => window.close(), 400);
+};
 $('sign-out').onclick = async () => {
   await syncToDrive();
   await fetch('/api/logout', { method: 'POST' });
