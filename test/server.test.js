@@ -88,3 +88,65 @@ test('rejects malformed chat requests', async () => {
   });
   assert.equal(r.status, 400);
 });
+
+const run = (body) => fetch(`${base}/api/run`, {
+  method: 'POST',
+  headers: { ...auth, 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
+test('lists runnable languages', async () => {
+  const data = await (await fetch(`${base}/api/run/languages`, { headers: auth })).json();
+  assert.equal(data.enabled, true);
+  const js = data.languages.find((l) => l.id === 'javascript');
+  assert.equal(js.available, true);
+  for (const id of ['python', 'java', 'c', 'cpp', 'go', 'rust']) assert.ok(data.languages.some((l) => l.id === id), id);
+});
+
+test('runs JavaScript with stdin', async () => {
+  const r = await run({ language: 'javascript', code: 'const s = require("fs").readFileSync(0, "utf8"); console.log(s.trim().toUpperCase()); console.error("warn")', stdin: 'edean\n' });
+  assert.equal(r.status, 200);
+  const data = await r.json();
+  assert.equal(data.exitCode, 0);
+  assert.equal(data.stdout, 'EDEAN\n');
+  assert.equal(data.stderr, 'warn\n');
+});
+
+test('reports a non-zero exit code', async () => {
+  const data = await (await run({ language: 'javascript', code: 'process.exit(3)' })).json();
+  assert.equal(data.phase, 'run');
+  assert.equal(data.exitCode, 3);
+});
+
+test('does not pass secrets to programs', async () => {
+  process.env.SOME_API_KEY = 'leak';
+  const data = await (await run({ language: 'javascript', code: 'console.log(JSON.stringify(Object.keys(process.env).filter(k => /KEY|PASSWORD/.test(k))))' })).json();
+  delete process.env.SOME_API_KEY;
+  assert.equal(data.stdout.trim(), '[]');
+});
+
+test('reports compile errors separately', async (t) => {
+  const langs = (await (await fetch(`${base}/api/run/languages`, { headers: auth })).json()).languages;
+  if (!langs.find((l) => l.id === 'c')?.available) return t.skip('gcc not installed');
+  const data = await (await run({ language: 'c', code: 'int main(void) { return missing; }' })).json();
+  assert.equal(data.phase, 'compile');
+  assert.notEqual(data.exitCode, 0);
+  assert.match(data.stderr, /missing/);
+});
+
+test('rejects unknown languages and empty code', async () => {
+  assert.equal((await run({ language: 'cobol', code: 'x' })).status, 400);
+  assert.equal((await run({ language: 'javascript', code: '   ' })).status, 400);
+});
+
+test('refuses to run code when reachable from the network without a password', async () => {
+  const saved = { host: mod.config.host, appPassword: mod.config.appPassword };
+  Object.assign(mod.config, { host: '0.0.0.0', appPassword: '' });
+  try {
+    const langs = await (await fetch(`${base}/api/run/languages`)).json();
+    assert.equal(langs.enabled, false);
+    assert.equal((await run({ language: 'javascript', code: 'console.log(1)' })).status, 403);
+  } finally {
+    Object.assign(mod.config, saved);
+  }
+});

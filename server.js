@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { listLanguages, runCode } from './runner.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +20,8 @@ export const config = {
   defaultModel: process.env.DEFAULT_MODEL || 'qwen2.5-coder:7b',
   // Optional shared password (HTTP Basic auth) for when you expose Edean on a network.
   appPassword: process.env.APP_PASSWORD || '',
+  // Code runner: "auto" (on unless reachable from the network without a password), "on", or "off".
+  codeRunner: (process.env.CODE_RUNNER || 'auto').toLowerCase(),
   maxBodyBytes: 8 * 1024 * 1024,
 };
 
@@ -26,6 +29,8 @@ const STATIC = {
   '/': ['public/index.html', 'text/html; charset=utf-8'],
   '/app.js': ['public/app.js', 'text/javascript; charset=utf-8'],
   '/prompts.js': ['public/prompts.js', 'text/javascript; charset=utf-8'],
+  '/lib.js': ['public/lib.js', 'text/javascript; charset=utf-8'],
+  '/compiler.js': ['public/compiler.js', 'text/javascript; charset=utf-8'],
   '/styles.css': ['public/styles.css', 'text/css; charset=utf-8'],
   '/favicon.svg': ['public/favicon.svg', 'image/svg+xml'],
   // Libraries are served from node_modules so the browser never calls a CDN.
@@ -110,6 +115,42 @@ export function buildChatPayload(input) {
   return payload;
 }
 
+const isLoopback = (host) => ['127.0.0.1', 'localhost', '::1'].includes(host);
+
+// Running code is powerful, so refuse it when anyone on the network could reach it.
+export function runnerBlockedReason() {
+  if (config.codeRunner === 'off') return 'The code runner is turned off (CODE_RUNNER=off).';
+  if (config.codeRunner === 'on') return null;
+  if (!isLoopback(config.host) && !config.appPassword) {
+    return 'The code runner is disabled because Edean is reachable from your network without APP_PASSWORD. Set APP_PASSWORD (or CODE_RUNNER=on if you know it is safe).';
+  }
+  return null;
+}
+
+function handleLanguages(res) {
+  const blocked = runnerBlockedReason();
+  sendJson(res, 200, { enabled: !blocked, reason: blocked || '', languages: listLanguages() });
+}
+
+async function handleRun(req, res) {
+  const blocked = runnerBlockedReason();
+  if (blocked) return sendJson(res, 403, { error: blocked });
+  let input;
+  try {
+    input = JSON.parse(await readBody(req));
+  } catch (err) {
+    return sendJson(res, err.status || 400, { error: err.message || 'Invalid request' });
+  }
+  const abort = new AbortController();
+  res.on('close', () => { if (!res.writableFinished) abort.abort(); });
+  try {
+    const result = await runCode({ language: input?.language, code: input?.code, stdin: input?.stdin }, { signal: abort.signal });
+    if (!abort.signal.aborted) sendJson(res, 200, result);
+  } catch (err) {
+    if (!abort.signal.aborted) sendJson(res, err.status || 500, { error: err.status ? err.message : 'Could not run the program' });
+  }
+}
+
 async function handleModels(res) {
   try {
     const r = await fetch(`${config.llmBaseUrl}/models`, { headers: upstreamHeaders(), signal: AbortSignal.timeout(8000) });
@@ -187,6 +228,8 @@ export function createServer() {
       if (pathname === '/api/health') return sendJson(res, 200, { ok: true });
       if (pathname === '/api/models' && req.method === 'GET') return await handleModels(res);
       if (pathname === '/api/chat' && req.method === 'POST') return await handleChat(req, res);
+      if (pathname === '/api/run/languages' && req.method === 'GET') return handleLanguages(res);
+      if (pathname === '/api/run' && req.method === 'POST') return await handleRun(req, res);
       if (req.method === 'GET') return serveStatic(req, res, pathname);
       send(res, 405, 'Method not allowed', { 'Content-Type': 'text/plain' });
     } catch (err) {
@@ -203,5 +246,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (config.host !== '127.0.0.1' && config.host !== 'localhost' && !config.appPassword) {
       console.warn('Warning: Edean is listening beyond localhost without APP_PASSWORD set.');
     }
+    const blocked = runnerBlockedReason();
+    const langs = listLanguages().filter((l) => l.available).map((l) => l.id);
+    console.log(blocked ? `Code runner: disabled — ${blocked}` : `Code runner: ${langs.join(', ') || 'no toolchains found'}`);
   });
 }

@@ -61,3 +61,176 @@ export const STARTERS = [
   { mode: 'explain', text: 'Explain how async/await works under the hood in JavaScript.' },
   { mode: 'test', text: 'Write Jest tests for a function that validates email addresses.' },
 ];
+
+// Used by the Advice button in the Compiler tab. The reply lands in the Notepad.
+export const ADVICE_PROMPT = `Mode: ADVICE. The user is writing a program in Edean's built-in compiler and pressed "Advice". You are writing a short note for their notepad.
+- Start with a one-line verdict (e.g. "Crashes on empty input", "Works, but O(n²)", "Looks good").
+- If the run failed (compile error, exception, wrong output, timeout), explain the root cause first, then the fix.
+- Otherwise point out real bugs, edge cases, performance problems and readability issues, most important first, as short bullet points.
+- If you recommend code changes, finish with the complete corrected program in ONE fenced code block so it can be dropped straight into the editor.
+- If the user asked a specific question, answer that first.
+- Keep it brief: this is a notepad, not an essay.`;
+
+// Starter programs for the Compiler tab.
+export const TEMPLATES = {
+  python: `def fib(n):
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+
+
+print("Hello from Python!")
+print([fib(i) for i in range(10)])
+`,
+  javascript: `function fib(n) {
+  let [a, b] = [0, 1];
+  for (let i = 0; i < n; i++) [a, b] = [b, a + b];
+  return a;
+}
+
+console.log('Hello from JavaScript!');
+console.log(Array.from({ length: 10 }, (_, i) => fib(i)));
+`,
+  typescript: `function fib(n: number): number {
+  let [a, b] = [0, 1];
+  for (let i = 0; i < n; i++) [a, b] = [b, a + b];
+  return a;
+}
+
+const nums: number[] = Array.from({ length: 10 }, (_, i) => fib(i));
+console.log('Hello from TypeScript!');
+console.log(nums);
+`,
+  java: `import java.util.*;
+
+public class Main {
+    static long fib(int n) {
+        long a = 0, b = 1;
+        for (int i = 0; i < n; i++) {
+            long t = a + b;
+            a = b;
+            b = t;
+        }
+        return a;
+    }
+
+    public static void main(String[] args) {
+        System.out.println("Hello from Java!");
+        List<Long> nums = new ArrayList<>();
+        for (int i = 0; i < 10; i++) nums.add(fib(i));
+        System.out.println(nums);
+    }
+}
+`,
+  c: `#include <stdio.h>
+
+long fib(int n) {
+    long a = 0, b = 1;
+    for (int i = 0; i < n; i++) {
+        long t = a + b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+int main(void) {
+    printf("Hello from C!\\n");
+    for (int i = 0; i < 10; i++) printf("%ld ", fib(i));
+    printf("\\n");
+    return 0;
+}
+`,
+  cpp: `#include <iostream>
+#include <vector>
+
+long fib(int n) {
+    long a = 0, b = 1;
+    for (int i = 0; i < n; i++) {
+        long t = a + b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+int main() {
+    std::cout << "Hello from C++!\\n";
+    std::vector<long> nums;
+    for (int i = 0; i < 10; i++) nums.push_back(fib(i));
+    for (long n : nums) std::cout << n << ' ';
+    std::cout << '\\n';
+}
+`,
+  go: `package main
+
+import "fmt"
+
+func fib(n int) int {
+\ta, b := 0, 1
+\tfor i := 0; i < n; i++ {
+\t\ta, b = b, a+b
+\t}
+\treturn a
+}
+
+func main() {
+\tfmt.Println("Hello from Go!")
+\tnums := make([]int, 10)
+\tfor i := range nums {
+\t\tnums[i] = fib(i)
+\t}
+\tfmt.Println(nums)
+}
+`,
+  rust: `fn fib(n: u32) -> u64 {
+    let (mut a, mut b) = (0u64, 1u64);
+    for _ in 0..n {
+        (a, b) = (b, a + b);
+    }
+    a
+}
+
+fn main() {
+    println!("Hello from Rust!");
+    let nums: Vec<u64> = (0..10).map(fib).collect();
+    println!("{:?}", nums);
+}
+`,
+  ruby: `def fib(n)
+  a, b = 0, 1
+  n.times { a, b = b, a + b }
+  a
+end
+
+puts "Hello from Ruby!"
+p (0...10).map { |i| fib(i) }
+`,
+  php: `<?php
+
+function fib(int $n): int {
+    [$a, $b] = [0, 1];
+    for ($i = 0; $i < $n; $i++) {
+        [$a, $b] = [$b, $a + $b];
+    }
+    return $a;
+}
+
+echo "Hello from PHP!\\n";
+echo implode(' ', array_map('fib', range(0, 9))), "\\n";
+`,
+  bash: `#!/usr/bin/env bash
+fib() {
+  local a=0 b=1
+  for ((i = 0; i < $1; i++)); do
+    local t=$((a + b)); a=$b; b=$t
+  done
+  echo "$a"
+}
+
+echo "Hello from Bash!"
+for n in {0..9}; do printf '%s ' "$(fib "$n")"; done
+echo
+`,
+};

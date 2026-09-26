@@ -1,12 +1,12 @@
-import { Marked } from '/vendor/marked.esm.js';
-import DOMPurify from '/vendor/purify.es.mjs';
+import { $, store, uid, escapeHtml, LANG_FROM_EXT, renderMarkdown, renderReply, streamChat, downloadText, copyText, handleCodeAction } from '/lib.js';
 import { BASE_SYSTEM_PROMPT, MODES, STARTERS } from '/prompts.js';
+import { initCompiler } from '/compiler.js';
 
-const $ = (id) => document.getElementById(id);
 const els = {
   sidebar: $('sidebar'), scrim: $('scrim'), menuBtn: $('menu-btn'),
   newChat: $('new-chat'), search: $('search'), chatList: $('chat-list'),
   modelSelect: $('model-select'), statusDot: $('status-dot'), modes: $('modes'),
+  viewTabs: document.querySelectorAll('.view-tab'), chatView: $('chat-view'), compilerView: $('compiler'),
   messages: $('messages'), composer: $('composer'), input: $('input'), sendBtn: $('send-btn'),
   attachBtn: $('attach-btn'), fileInput: $('file-input'), attachments: $('attachments'),
   settings: $('settings'), openSettings: $('open-settings'), setSystem: $('set-system'),
@@ -14,17 +14,7 @@ const els = {
   setTheme: $('set-theme'), exportChats: $('export-chats'), deleteAll: $('delete-all'),
 };
 
-// ---------- storage (browser only; wrapped because storage can be unavailable) ----------
-const store = {
-  get(key, fallback) {
-    try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
-  },
-  set(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { console.warn('Could not save', key, e); }
-  },
-};
-
-const DEFAULT_SETTINGS = { systemPrompt: BASE_SYSTEM_PROMPT, temperature: 0.2, maxTokens: 8192, theme: 'system', model: '', mode: 'build' };
+const DEFAULT_SETTINGS = { systemPrompt: BASE_SYSTEM_PROMPT, temperature: 0.2, maxTokens: 8192, theme: 'system', model: '', mode: 'build', view: 'chat' };
 const settings = { ...DEFAULT_SETTINGS, ...store.get('edean.settings', {}) };
 let chats = store.get('edean.chats', []);
 let currentId = store.get('edean.current', null);
@@ -34,49 +24,23 @@ let streaming = null; // { controller, chatId }
 const saveSettings = () => store.set('edean.settings', settings);
 const saveChats = () => { store.set('edean.chats', chats); store.set('edean.current', currentId); };
 const currentChat = () => chats.find((c) => c.id === currentId) || null;
-const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
-// ---------- markdown + code rendering ----------
-const EXT = {
-  javascript: 'js', js: 'js', typescript: 'ts', ts: 'ts', tsx: 'tsx', jsx: 'jsx', python: 'py', py: 'py', rust: 'rs', go: 'go',
-  java: 'java', kotlin: 'kt', swift: 'swift', c: 'c', cpp: 'cpp', 'c++': 'cpp', csharp: 'cs', cs: 'cs', ruby: 'rb', php: 'php',
-  html: 'html', css: 'css', scss: 'scss', json: 'json', yaml: 'yml', yml: 'yml', toml: 'toml', sql: 'sql', bash: 'sh', sh: 'sh',
-  shell: 'sh', zsh: 'sh', powershell: 'ps1', dockerfile: 'Dockerfile', markdown: 'md', md: 'md', lua: 'lua', dart: 'dart',
-  scala: 'scala', r: 'r', xml: 'xml', vue: 'vue', svelte: 'svelte', zig: 'zig', elixir: 'ex', haskell: 'hs',
-};
-const LANG_FROM_EXT = Object.fromEntries(Object.entries(EXT).map(([lang, ext]) => [ext.toLowerCase(), lang]));
+const compiler = initCompiler({ settings, onOpen: () => setView('compiler') });
 
-const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-const marked = new Marked({
-  gfm: true,
-  breaks: false,
-  renderer: {
-    code({ text, lang }) {
-      const language = (lang || '').trim().split(/\s+/)[0].toLowerCase();
-      let html;
-      try {
-        html = language && window.hljs?.getLanguage(language)
-          ? window.hljs.highlight(text, { language, ignoreIllegals: true }).value
-          : window.hljs ? window.hljs.highlightAuto(text).value : escapeHtml(text);
-      } catch { html = escapeHtml(text); }
-      return `<div class="code-block"><div class="code-head"><span class="code-lang">${escapeHtml(language || 'code')}</span>` +
-        `<span class="code-actions"><button type="button" data-action="download-code" data-lang="${escapeHtml(language)}">Download</button>` +
-        `<button type="button" data-action="copy-code">Copy</button></span></div>` +
-        `<pre><code class="hljs">${html}</code></pre></div>`;
-    },
-  },
-});
-
-// Split out <think>…</think> reasoning that some models (Qwen3, DeepSeek-R1) emit.
-function splitThinking(content) {
-  const m = content.match(/^\s*<think>([\s\S]*?)(<\/think>|$)/);
-  if (!m) return { thinking: '', answer: content, thinkingDone: true };
-  return { thinking: m[1].trim(), answer: content.slice(m[0].length), thinkingDone: m[2] === '</think>' };
-}
-
-function renderMarkdown(text) {
-  return DOMPurify.sanitize(marked.parse(text || ''), { ADD_ATTR: ['data-action', 'data-lang'] });
+// ---------- views ----------
+function setView(view) {
+  settings.view = view === 'compiler' ? 'compiler' : 'chat';
+  saveSettings();
+  const isChat = settings.view === 'chat';
+  els.chatView.hidden = !isChat;
+  els.compilerView.hidden = isChat;
+  els.modes.hidden = !isChat;
+  for (const tab of els.viewTabs) {
+    const active = tab.dataset.view === settings.view;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  }
+  if (isChat) els.input.focus(); else compiler.focus();
 }
 
 // ---------- UI rendering ----------
@@ -115,12 +79,12 @@ function renderChatList() {
   }
   for (const chat of list) {
     const row = document.createElement('div');
-    row.className = 'chat-item' + (chat.id === currentId ? ' active' : '');
+    row.className = 'chat-item' + (chat.id === currentId && settings.view === 'chat' ? ' active' : '');
     const open = document.createElement('button');
     open.type = 'button';
     open.className = 'chat-title';
     open.textContent = chat.title;
-    open.onclick = () => { currentId = chat.id; saveChats(); renderAll(); closeSidebar(); };
+    open.onclick = () => { currentId = chat.id; saveChats(); setView('chat'); renderAll(); closeSidebar(); };
     const del = document.createElement('button');
     del.type = 'button';
     del.className = 'chat-del';
@@ -191,32 +155,19 @@ function messageEl(msg, index, chat) {
 }
 
 function fillMessageBody(body, msg) {
-  if (msg.role === 'user') {
-    body.innerHTML = renderMarkdown(msg.display ?? msg.content);
-    if (msg.files?.length) {
-      const f = document.createElement('div');
-      f.className = 'file-chips';
-      for (const file of msg.files) {
-        const chip = document.createElement('span');
-        chip.className = 'chip';
-        chip.textContent = file;
-        f.appendChild(chip);
-      }
-      body.appendChild(f);
+  if (msg.role !== 'user') { body.innerHTML = renderReply(msg); return; }
+  body.innerHTML = renderMarkdown(msg.display ?? msg.content);
+  if (msg.files?.length) {
+    const f = document.createElement('div');
+    f.className = 'file-chips';
+    for (const file of msg.files) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = file;
+      f.appendChild(chip);
     }
-    return;
+    body.appendChild(f);
   }
-  const { thinking, answer, thinkingDone } = splitThinking(msg.content);
-  const reasoning = [msg.reasoning, thinking].filter(Boolean).join('\n\n');
-  let html = '';
-  if (reasoning) {
-    const open = msg.pending && !answer.trim() ? ' open' : '';
-    html += `<details class="thinking"${open}><summary>${msg.pending && !thinkingDone ? 'Thinking…' : 'Reasoning'}</summary>${renderMarkdown(reasoning)}</details>`;
-  }
-  html += renderMarkdown(answer);
-  if (msg.pending && !answer.trim() && !reasoning) html += '<div class="typing"><span></span><span></span><span></span></div>';
-  if (msg.error) html += `<div class="error">${escapeHtml(msg.error)}</div>`;
-  body.innerHTML = html;
 }
 
 function renderMessages() {
@@ -269,7 +220,7 @@ async function loadModels() {
     settings.model = els.modelSelect.value;
     els.statusDot.className = 'status-dot ' + (data.online ? 'online' : 'offline');
     els.statusDot.title = data.online ? 'Model backend connected' : `Model backend offline: ${data.error || 'unreachable'}`;
-  } catch (e) {
+  } catch {
     els.statusDot.className = 'status-dot offline';
     els.statusDot.title = 'Cannot reach the Edean server';
   }
@@ -281,7 +232,7 @@ function buildSystemPrompt() {
   return [settings.systemPrompt || BASE_SYSTEM_PROMPT, mode?.prompt].filter(Boolean).join('\n\n');
 }
 
-async function composeUserMessage(text) {
+function composeUserMessage(text) {
   const files = pendingFiles;
   pendingFiles = [];
   renderAttachments();
@@ -305,7 +256,7 @@ async function send(text) {
     chats.push(chat);
     currentId = chat.id;
   }
-  const userMsg = await composeUserMessage(text);
+  const userMsg = composeUserMessage(text);
   if (chat.messages.length === 0) chat.title = (text || userMsg.files?.join(', ') || 'New chat').replace(/\s+/g, ' ').slice(0, 60);
   chat.messages.push(userMsg);
   els.input.value = '';
@@ -337,44 +288,14 @@ async function generate(chat) {
   };
 
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: settings.model,
-        temperature: settings.temperature,
-        max_tokens: settings.maxTokens,
-        messages: [{ role: 'system', content: buildSystemPrompt() }, ...history],
-      }),
+    await streamChat({
+      model: settings.model,
+      temperature: settings.temperature,
+      maxTokens: settings.maxTokens,
+      messages: [{ role: 'system', content: buildSystemPrompt() }, ...history],
       signal: controller.signal,
+      onDelta: ({ content, reasoning }) => { msg.content += content; msg.reasoning += reasoning; repaint(); },
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Request failed (${res.status})`);
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') continue;
-        let json;
-        try { json = JSON.parse(data); } catch { continue; }
-        if (json.error) throw new Error(json.error.message || String(json.error));
-        const delta = json.choices?.[0]?.delta || {};
-        if (delta.reasoning_content || delta.reasoning) msg.reasoning += delta.reasoning_content || delta.reasoning;
-        if (delta.content) msg.content += delta.content;
-        repaint();
-      }
-    }
   } catch (e) {
     if (e.name !== 'AbortError') msg.error = e.message || String(e);
   } finally {
@@ -399,44 +320,13 @@ function autosize() {
   els.input.style.height = Math.min(els.input.scrollHeight, 280) + 'px';
 }
 
-function downloadText(filename, text, type = 'text/plain') {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function copyText(text, button) {
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    document.execCommand('copy'); ta.remove();
-  }
-  if (button) {
-    const old = button.textContent;
-    button.textContent = 'Copied';
-    setTimeout(() => { button.textContent = old; }, 1200);
-  }
-}
-
 els.messages.addEventListener('click', (e) => {
   const b = e.target.closest('button[data-action]');
   if (!b) return;
+  if (handleCodeAction(b, { onUse: (code, lang) => compiler.open(code, lang) })) return;
   const chat = currentChat();
-  const action = b.dataset.action;
-  if (action === 'copy-code' || action === 'download-code') {
-    const code = b.closest('.code-block').querySelector('code').textContent;
-    if (action === 'copy-code') return copyText(code, b);
-    const lang = b.dataset.lang;
-    const firstLine = code.split('\n')[0];
-    const pathMatch = firstLine.match(/([\w./-]+\.[A-Za-z0-9]+)\s*(?:\*\/|-->)?\s*$/);
-    const name = pathMatch ? pathMatch[1].split('/').pop() : `snippet.${EXT[lang] || 'txt'}`;
-    return downloadText(name, code);
-  }
   if (!chat) return;
+  const action = b.dataset.action;
   const index = Number(b.dataset.index);
   const msg = chat.messages[index];
   if (action === 'copy-msg') return copyText(msg.content, b);
@@ -483,7 +373,8 @@ els.composer.addEventListener('drop', (e) => {
   els.fileInput.onchange();
 });
 
-els.newChat.onclick = () => { currentId = null; saveChats(); renderAll(); closeSidebar(); els.input.focus(); };
+for (const tab of els.viewTabs) tab.onclick = () => { setView(tab.dataset.view); renderChatList(); };
+els.newChat.onclick = () => { currentId = null; saveChats(); setView('chat'); renderAll(); closeSidebar(); els.input.focus(); };
 els.search.addEventListener('input', renderChatList);
 els.modelSelect.onchange = () => { settings.model = els.modelSelect.value; saveSettings(); };
 
@@ -523,5 +414,5 @@ for (const c of chats) for (const m of c.messages) if (m.pending) { delete m.pen
 applyTheme();
 renderModes();
 renderAll();
+setView(settings.view);
 loadModels();
-els.input.focus();
