@@ -1,0 +1,30 @@
+"HELPER TERM K OF (AU^P+BV^Q)^N
+(N nCr K)*A^(N-K)*B^K→C
+P*(N-K)→E
+Q*K→F
+If C<0
+Then
+"-"→Str3
+Else
+"+"→Str3
+End
+If abs(C)≠1 or not((G and E≠0) or (H and F≠0))
+Then
+abs(C)→X
+prgmZFRAC
+If inString(Str0,"/") and ((G and E≠0) or (H and F≠0))
+"("+Str0+")"→Str0
+Str3+Str0→Str3
+End
+If G and E≠0
+Then
+Str3+Str1→Str3
+If E≠1
+Str3+"^"+toString(E)→Str3
+End
+If H and F≠0
+Then
+Str3+Str2→Str3
+If F≠1
+Str3+"^"+toString(F)→Str3
+End

@@ -1,0 +1,39 @@
+"HELPER X TO STR0=√(X)
+If X=0
+Then
+"0"→Str0
+0→W
+Else
+prgmZFRAC
+If W
+Then
+U*V→S
+1→T
+2→Y
+While Y²≤S
+While fPart(S/Y²)=0
+T*Y→T
+S/Y²→S
+End
+Y+1→Y
+End
+gcd(T,V)→Z
+T/Z→T
+V/Z→V
+If S=1
+Then
+toString(T)→Str0
+0→W
+Else
+"√("+toString(S)+")"→Str0
+If T≠1
+toString(T)+Str0→Str0
+1→W
+End
+If V≠1
+Str0+"/"+toString(V)→Str0
+Else
+toString(round(√(X),4))→Str0
+1→W
+End
+End

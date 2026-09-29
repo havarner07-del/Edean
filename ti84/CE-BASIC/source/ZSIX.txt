@@ -1,0 +1,34 @@
+"HELPER SHOW 6 TRIG FROM L₃
+For(I,1,6)
+If I=1
+{L₃(3),L₃(4),L₃(5)}→L₁
+If I=2
+{L₃(1),L₃(2),L₃(5)}→L₁
+If I=3
+{L₃(1)*L₃(3),L₃(4),L₃(2)}→L₁
+If I=4
+{L₃(3),L₃(5),L₃(4)}→L₁
+If I=5
+{L₃(1),L₃(5),L₃(2)}→L₁
+If I=6
+{L₃(1)*L₃(3),L₃(2),L₃(4)}→L₁
+sub("SINCOSTANCSCSECCOT",3*I-2,3)+"="→Str1
+If L₁(3)=0
+Then
+Str1+"UNDEFINED"→Str1
+Else
+If L₁(2)=0
+Then
+Str1+"0"→Str1
+Else
+L₁(2)/L₁(3)→X
+prgmZRAD
+If L₁(1)<0
+"⁻"+Str0→Str0
+Str1+Str0→Str1
+If inString(Str0,"√(") or inString(Str0,"/")
+Str1+"  ("+toString(round(L₁(1)*√(L₁(2)/L₁(3)),4))+")"→Str1
+End
+End
+Disp Str1
+End

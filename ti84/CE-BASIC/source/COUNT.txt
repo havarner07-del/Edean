@@ -1,0 +1,147 @@
+Lbl M
+ClrHome
+Menu("COUNTING CH 11","N!, NPR, NCR",1,"BINOMIAL THEOREM",2,"ARRANGE LETTERS",3,"FUNDAMENTAL COUNTING",4,"CIRCULAR (N-1)!",5,"FORMULAS",6,"QUIT",Q)
+Lbl 1
+ClrHome
+Input "N=",N
+Input "R=",R
+Disp "N! ="+toString(N!)
+Disp "NPR="+toString(N nPr R)
+Disp "NCR="+toString(N nCr R)
+Disp "","NPR ORDER MATTERS","NCR ORDER DOES NOT"
+Goto G9
+Lbl 2
+ClrHome
+Disp "(AU^P+BV^Q)^N","VARIABLE 0 IF NONE"
+Input "A=",A
+Input "U=",Str1
+Str1≠"0"→G
+1→P
+If G
+Input "P=",P
+Input "B=",B
+Input "V=",Str2
+Str2≠"0"→H
+1→Q
+If H
+Input "Q=",Q
+Input "N=",N
+If A=0 or B=0
+Disp "A AND B CANNOT BE 0"
+If A=0 or B=0
+Goto G9
+Lbl C0
+Menu("BINOMIAL","FULL EXPANSION",C1,"K-TH TERM",C2,"TERM WITH U^M",C3,"PASCAL ROW N",C4,"MAIN MENU",M)
+Lbl C1
+ClrHome
+For(K,0,N)
+prgmZBTERM
+If K=0 and sub(Str3,1,1)="+"
+sub(Str3,2,length(Str3)-1)→Str3
+Disp Str3
+If fPart((K+1)/9)=0 and K<N
+Pause 
+End
+Pause 
+Goto C0
+Lbl C2
+ClrHome
+Input "K (FIRST TERM=1)=",K
+K-1→K
+Goto C5
+Lbl C3
+ClrHome
+If not(G)
+Then
+Disp "NO U VARIABLE"
+0.5→K
+Else
+Input "M (POWER OF U)=",M
+N-M/P→K
+End
+Lbl C5
+If K≠int(K) or K<0 or K>N
+Disp "NO SUCH TERM"
+If K≠int(K) or K<0 or K>N
+Goto C9
+prgmZBTERM
+If sub(Str3,1,1)="+"
+sub(Str3,2,length(Str3)-1)→Str3
+Disp "TERM NUMBER "+toString(K+1)
+Disp "=C("+toString(N)+","+toString(K)+")*A^"+toString(N-K)+"*B^"+toString(K)
+Disp "="+Str3
+C→X
+prgmZFRAC
+Disp "COEFFICIENT="+Str0
+Lbl C9
+Pause 
+Goto C0
+Lbl C4
+ClrHome
+Disp "ROW "+toString(N)
+"1"→Str3
+For(K,1,N)
+toString(N nCr K)→Str4
+If length(Str3)+length(Str4)≥26
+Then
+Disp Str3
+Str4→Str3
+Else
+Str3+" "+Str4→Str3
+End
+End
+Disp Str3
+Pause 
+Goto C0
+Lbl 3
+ClrHome
+Disp "EX MISSISSIPPI"
+Input "WORD=",Str4
+length(Str4)→N
+1→D
+For(I,1,N)
+sub(Str4,I,1)→Str5
+If inString(Str4,Str5)=I
+Then
+0→C
+For(J,I,N)
+C+(sub(Str4,J,1)=Str5)→C
+End
+If C>1
+Then
+D*C!→D
+Disp Str5+" REPEATS "+toString(C)+" TIMES"
+End
+End
+End
+Disp toString(N)+" LETTERS"
+Disp "N!/(REPEAT! PRODUCT)"
+Disp "="+toString(N!/D)
+Goto G9
+Lbl 4
+ClrHome
+Disp "CHOICES FOR EACH STEP","TYPE 0 WHEN DONE"
+1→D
+Repeat C=0
+Input "CHOICES=",C
+If C≠0
+D*C→D
+End
+Disp "TOTAL WAYS="+toString(D)
+Goto G9
+Lbl 5
+ClrHome
+Input "N=",N
+Disp "(N-1)! ="+toString((N-1)!)
+Goto G9
+Lbl 6
+ClrHome
+Disp "N! =N(N-1)...(2)(1), 0! =1","NPR=N!/(N-R)!  ORDER","NCR=N!/(R!(N-R)!)","  ORDER DOES NOT MATTER","FUNDAMENTAL M*N*...","REPEATS N!/(N1!N2!...)","CIRCLE (N-1)!"
+Pause 
+ClrHome
+Disp "(A+B)^N= SUM OF","  C(N,K)A^(N-K)B^K","  FOR K=0 TO N","K-TH TERM","  C(N,K-1)*","  A^(N-K+1)*B^(K-1)","PASCAL ROW N= NCR VALUES"
+Lbl G9
+Pause 
+Goto M
+Lbl Q
+ClrHome

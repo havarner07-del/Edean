@@ -1,0 +1,10 @@
+"HELPER X TO STR0 WITH SIGN
+If X<0
+Then
+⁻X→X
+prgmZFRAC
+"-"+Str0→Str0
+Else
+prgmZFRAC
+"+"+Str0→Str0
+End

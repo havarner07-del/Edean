@@ -1,0 +1,8 @@
+"HELPER ASK ANGLE TO A DEG
+Input "DEG(1) OR RAD(2)? ",Y
+If Y=2
+Disp "TYPE LIKE 5π/6"
+Input "ANGLE=",A
+If Y=2
+180*A/π→A
+round(A,9)→A

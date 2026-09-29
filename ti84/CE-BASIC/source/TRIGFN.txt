@@ -1,0 +1,248 @@
+Degree
+Lbl M
+ClrHome
+Menu("TRIG FUNCTIONS 4.2-4.4","EXACT VALUES OF ANGLE",1,"POINT (X,Y) ON SIDE",2,"ONE VALUE, FIND OTHERS",3,"RIGHT TRIANGLE",4,"FORMULAS",5,"QUIT",Q)
+Lbl 1
+ClrHome
+prgmZANG
+Degree
+A-360*int(A/360)→G
+If G≤90
+G→R
+If G>90 and G≤180
+180-G→R
+If G>180 and G≤270
+G-180→R
+If G>270
+360-G→R
+round(R,6)→R
+A→X
+prgmZFRAC
+Str0→Str2
+A→X
+prgmZPI
+Disp Str2+" DEG = "+Str0+" RAD"
+If G=90*int(G/90)
+Disp "ON AN AXIS"
+If G≠90*int(G/90)
+Disp "QUADRANT "+sub("I  II IIIIV ",3*int(G/90)+1,3)
+R→X
+prgmZFRAC
+Str0→Str2
+R→X
+prgmZPI
+Disp "REFERENCE "+Str2+" = "+Str0
+If R≠0 and R≠30 and R≠45 and R≠60 and R≠90
+Goto N1
+If R=0
+{1,0,1}→L₂
+If R=30
+{3,1,4}→L₂
+If R=45
+{1,1,2}→L₂
+If R=60
+{1,3,4}→L₂
+If R=90
+{0,1,1}→L₂
+(cos(G)>1ᴇ⁻9)-(cos(G)<⁻1ᴇ⁻9)→J
+(sin(G)>1ᴇ⁻9)-(sin(G)<⁻1ᴇ⁻9)→K
+{J,L₂(1),K,L₂(2),L₂(3)}→L₃
+L₂(1)/L₂(3)→X
+prgmZRAD
+If J<0
+"⁻"+Str0→Str0
+Str0→Str2
+L₂(2)/L₂(3)→X
+prgmZRAD
+If K<0
+"⁻"+Str0→Str0
+Disp "UNIT CIRCLE (COS,SIN)","("+Str2+","+Str0+")"
+Pause 
+ClrHome
+prgmZSIX
+Goto G9
+Lbl N1
+Pause 
+ClrHome
+Disp "NOT A SPECIAL ANGLE"
+Disp "SIN="+toString(round(sin(G),5))
+Disp "COS="+toString(round(cos(G),5))
+If cos(G)≠0
+Disp "TAN="+toString(round(tan(G),5))
+If sin(G)≠0
+Disp "CSC="+toString(round(1/sin(G),5))
+If cos(G)≠0
+Disp "SEC="+toString(round(1/cos(G),5))
+If sin(G)≠0
+Disp "COT="+toString(round(cos(G)/sin(G),5))
+Goto G9
+Lbl 2
+ClrHome
+Disp "POINT (X,Y) ON TERMINAL","SIDE. YOU CAN TYPE √(3)"
+Input "X=",C
+Input "Y=",D
+If C=0 and D=0
+Disp "CANNOT BE (0,0)"
+If C=0 and D=0
+Goto G9
+C²+D²→X
+prgmZRAD
+Disp "R=√(X²+Y²)="+Str0
+If C=0
+90+180*(D<0)→G
+If C≠0
+tan⁻¹(D/C)+180*(C<0)→G
+G-360*int(G/360)→G
+If G=90*int(G/90)
+Disp "ON AN AXIS"
+If G≠90*int(G/90)
+Disp "QUADRANT "+sub("I  II IIIIV ",3*int(G/90)+1,3)
+Disp "ANGLE="+toString(round(G,4))+" DEG"
+Pause 
+ClrHome
+{(C>0)-(C<0),C²,(D>0)-(D<0),D²,C²+D²}→L₃
+prgmZSIX
+Goto G9
+Lbl 3
+Menu("WHICH ONE IS GIVEN?","SIN",V1,"COS",V2,"TAN",V3,"CSC",V4,"SEC",V5,"COT",V6)
+Lbl V1
+1→F
+Goto V7
+Lbl V2
+2→F
+Goto V7
+Lbl V3
+3→F
+Goto V7
+Lbl V4
+4→F
+Goto V7
+Lbl V5
+5→F
+Goto V7
+Lbl V6
+6→F
+Lbl V7
+ClrHome
+Disp "TYPE LIKE ⁻3/5 OR","2√(2)/3"
+Input "VALUE=",C
+Input "QUADRANT (1-4)=",Q
+ClrHome
+{1,⁻1,⁻1,1}→L₂
+L₂(Q)→J
+{1,1,⁻1,⁻1}→L₂
+L₂(Q)→K
+C²→A
+1→B
+If F>3
+Then
+1→A
+C²→B
+F-3→F
+End
+If F=1
+{B-A,A,B,K}→L₂
+If F=2
+{A,B-A,B,J}→L₂
+If F=3
+{B,A,A+B,J*K}→L₂
+If (C>0)-(C<0)≠L₂(4)
+Disp "WARNING SIGN DOES NOT","MATCH THAT QUADRANT"
+If L₂(1)<0 or L₂(2)<0
+Disp "IMPOSSIBLE VALUE"
+If L₂(1)<0 or L₂(2)<0
+Goto G9
+{J,L₂(1),K,L₂(2),L₂(3)}→L₃
+sin⁻¹(√(L₂(2)/L₂(3)))→R
+If Q=2
+180-R→R
+If Q=3
+180+R→R
+If Q=4
+360-R→R
+Disp "ANGLE="+toString(round(R,4))+" DEG"
+prgmZSIX
+Goto G9
+Lbl 4
+ClrHome
+Disp "RIGHT ANGLE C, HYP=C","SIDE A OPPOSITE ANGLE A","TYPE 0 IF UNKNOWN"
+Input "SIDE A=",D
+Input "SIDE B=",E
+Input "SIDE C=",H
+Input "ANGLE A (DEG)=",F
+Input "ANGLE B (DEG)=",G
+If G≠0 and F=0
+90-G→F
+(D≠0)+(E≠0)+(H≠0)→N
+If N=0 or (N=1 and F=0)
+Disp "NEED 2 SIDES, OR","1 SIDE AND 1 ANGLE"
+If N=0 or (N=1 and F=0)
+Goto G9
+If F≠0
+Then
+If D≠0
+Then
+D/sin(F)→H
+D/tan(F)→E
+Else
+If E≠0
+Then
+E*tan(F)→D
+E/cos(F)→H
+Else
+H*sin(F)→D
+H*cos(F)→E
+End
+End
+Else
+If D≠0 and E≠0
+√(D²+E²)→H
+If D≠0 and H≠0 and E=0
+√(H²-D²)→E
+If D=0
+√(H²-E²)→D
+tan⁻¹(D/E)→F
+End
+90-F→G
+ClrHome
+D²→X
+prgmZRAD
+If inString(Str0,"√(")
+Str0+"  ("+toString(round(D,4))+")"→Str0
+Disp "A="+Str0
+E²→X
+prgmZRAD
+If inString(Str0,"√(")
+Str0+"  ("+toString(round(E,4))+")"→Str0
+Disp "B="+Str0
+H²→X
+prgmZRAD
+If inString(Str0,"√(")
+Str0+"  ("+toString(round(H,4))+")"→Str0
+Disp "C="+Str0
+Disp "ANGLE A="+toString(round(F,4))+" DEG"
+Disp "ANGLE B="+toString(round(G,4))+" DEG"
+Disp "AREA=AB/2="+toString(round(D*E/2,4))
+Pause 
+ClrHome
+Disp "TRIG OF ANGLE A"
+{1,E²,1,D²,H²}→L₃
+prgmZSIX
+Goto G9
+Lbl 5
+ClrHome
+Disp "SOH CAH TOA","CSC=1/SIN  SEC=1/COS","COT=1/TAN=COS/SIN","SIN²+COS²=1","1+TAN²=SEC²","1+COT²=CSC²","X=RCOS  Y=RSIN","R=√(X²+Y²)"
+Pause 
+ClrHome
+Disp "POSITIVE IN QUADRANT","I ALL, II SIN/CSC","III TAN/COT, IV COS/SEC","(ALL STUDENTS TAKE CALC)","REFERENCE ANGLE","II 180-X  III X-180","IV 360-X"
+Pause 
+ClrHome
+Disp "DEG   SIN    COS    TAN","0     0      1      0","30    1/2    √(3)/2 √(3)/3","45    √(2)/2 √(2)/2 1","60    √(3)/2 1/2    √(3)","90    1      0      UNDEF"
+Pause 
+ClrHome
+Disp "COFUNCTION","  SIN(A)=COS(90-A)","EVEN COS(⁻X)=COS(X)","ODD SIN, TAN, CSC, COT"
+Lbl G9
+Pause 
+Goto M
+Lbl Q
+ClrHome

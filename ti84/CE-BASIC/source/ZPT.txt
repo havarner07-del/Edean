@@ -1,0 +1,7 @@
+"HELPER L₄ TO STR0 POINT
+L₄(1)→X
+prgmZFRAC
+Str0→Str9
+L₄(2)→X
+prgmZFRAC
+"("+Str9+","+Str0+")"→Str0

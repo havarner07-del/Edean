@@ -1,0 +1,40 @@
+"HELPER X TO STR0 FRACTION
+abs(X)→Y
+Y→Z
+0→S
+1→T
+1→U
+0→V
+0→W
+While not(W) and V≤1000
+int(Z)→θ
+{θ*T+S,θ*V+U}→L₆
+T→S
+V→U
+L₆(1)→T
+L₆(2)→V
+If V≤1000 and abs(T/V-Y)≤1ᴇ⁻9*max(1,Y)
+1→W
+If not(W)
+Then
+If Z-θ<1ᴇ⁻9
+Then
+1001→V
+Else
+1/(Z-θ)→Z
+End
+End
+End
+If W
+Then
+If X<0
+⁻T→T
+T→U
+toString(T)→Str0
+If V≠1
+Str0+"/"+toString(V)→Str0
+Else
+X→U
+1→V
+toString(round(X,4))→Str0
+End

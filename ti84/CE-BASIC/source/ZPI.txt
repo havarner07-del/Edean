@@ -1,0 +1,20 @@
+"HELPER DEG X TO STR0 IN π
+X/180→X
+prgmZFRAC
+If W and V≤360
+Then
+If U=0
+Then
+"0"→Str0
+Else
+"π"→Str0
+If abs(U)≠1
+toString(abs(U))+Str0→Str0
+If U<0
+"⁻"+Str0→Str0
+If V≠1
+Str0+"/"+toString(V)→Str0
+End
+Else
+toString(round(X*π,4))→Str0
+End

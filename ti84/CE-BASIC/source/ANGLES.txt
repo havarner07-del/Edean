@@ -1,0 +1,184 @@
+Lbl M
+ClrHome
+Menu("ANGLES 4.1","DEGREES AND RADIANS",1,"DMS AND DECIMAL DEG",2,"COTERMINAL/REFERENCE",3,"ARC LENGTH AND SECTOR",4,"LINEAR/ANGULAR SPEED",5,"FORMULAS",6,"QUIT",Q)
+Lbl 1
+ClrHome
+prgmZANG
+A→X
+prgmZFRAC
+Disp "="+Str0+" DEGREES"
+A→X
+prgmZPI
+Disp "="+Str0+" RADIANS"
+Disp "="+toString(round(A*π/180,5))+" RADIANS"
+Goto G9
+Lbl 2
+Menu("DMS","D M S TO DECIMAL",D1,"DECIMAL TO D M S",D2,"BACK",M)
+Lbl D1
+ClrHome
+Input "DEGREES=",D
+Input "MINUTES=",E
+Input "SECONDS=",F
+Disp "="+toString(round(D+E/60+F/3600,6))+" DEGREES"
+Goto G9
+Lbl D2
+ClrHome
+Input "DECIMAL DEGREES=",A
+abs(A)→B
+iPart(B)→D
+iPart(60*fPart(B))→E
+round(3600*B-3600*D-60*E,2)→F
+If F≥60
+Then
+F-60→F
+E+1→E
+End
+If E≥60
+Then
+E-60→E
+D+1→D
+End
+If A<0
+⁻D→D
+Disp toString(D)+" DEG "+toString(E)+" MIN",toString(F)+" SEC"
+Goto G9
+Lbl 3
+ClrHome
+prgmZANG
+ClrHome
+A→X
+prgmZPI
+A→X
+Str0→Str1
+prgmZFRAC
+Disp Str0+" DEG = "+Str1
+A-360*int(A/360)→G
+If G=90*int(G/90)
+Disp "ON AN AXIS"
+If G≠90*int(G/90)
+Disp "QUADRANT "+sub("I  II IIIIV ",3*int(G/90)+1,3)
+G→X
+prgmZFRAC
+Str0→Str1
+G+360→X
+prgmZFRAC
+Str0→Str2
+G-360→X
+prgmZFRAC
+Disp "COTERMINAL "+Str1,"  "+Str2+", "+Str0
+G→X
+prgmZPI
+Str0→Str1
+G+360→X
+prgmZPI
+Str0→Str2
+G-360→X
+prgmZPI
+Disp "  "+Str1+", "+Str2,"  "+Str0
+If G≤90
+G→R
+If G>90 and G≤180
+180-G→R
+If G>180 and G≤270
+G-180→R
+If G>270
+360-G→R
+R→X
+prgmZFRAC
+Str0→Str1
+R→X
+prgmZPI
+Disp "REFERENCE "+Str1+" = "+Str0
+If A>0 and A<90
+Then
+90-A→X
+prgmZFRAC
+Str0→Str1
+90-A→X
+prgmZPI
+Disp "COMPLEMENT "+Str1+" = "+Str0
+End
+If A>0 and A<180
+Then
+180-A→X
+prgmZFRAC
+Str0→Str1
+180-A→X
+prgmZPI
+Disp "SUPPLEMENT "+Str1+" = "+Str0
+End
+Goto G9
+Lbl 4
+Menu("ARC AND SECTOR","FIND S (KNOW R, ANGLE)",R1,"FIND ANGLE (KNOW S, R)",R2,"FIND R (KNOW S, ANGLE)",R3,"BACK",M)
+Lbl R1
+ClrHome
+Input "RADIUS R=",R
+prgmZANG
+A*π/180→C
+R*C→E
+Disp "S=R*ANGLE(RADIANS)"
+Goto R4
+Lbl R2
+ClrHome
+Input "RADIUS R=",R
+Input "ARC LENGTH S=",E
+E/R→C
+C*180/π→A
+A→X
+prgmZFRAC
+Disp "ANGLE=S/R="+toString(round(C,5))+" RAD","="+Str0+" DEGREES"
+Goto R4
+Lbl R3
+ClrHome
+Input "ARC LENGTH S=",E
+prgmZANG
+A*π/180→C
+E/C→R
+180*R/π→X
+prgmZPI
+Disp "R=S/ANGLE="+Str0
+Lbl R4
+180*E/π→X
+prgmZPI
+Disp "S="+Str0
+If inString(Str0,"π")
+Disp "S="+toString(round(E,5))
+Disp "AREA=1/2*R²*ANGLE"
+90*R*R*C/π→X
+prgmZPI
+Disp "="+Str0
+If inString(Str0,"π")
+Disp "="+toString(round(R*R*C/2,5))
+Goto G9
+Lbl 5
+ClrHome
+Input "RADIUS R=",R
+Input "KNOW REV(1) OR OMEGA(2)? ",I
+If I=1
+Input "REVS PER TIME=",B
+If I=1
+2*π*B→G
+If I≠1
+Input "OMEGA (RAD PER TIME)=",G
+180*G/π→X
+prgmZPI
+Disp "OMEGA="+Str0+" RAD/TIME"
+Disp "="+toString(round(G,5))
+Disp "V=R*OMEGA"
+180*R*G/π→X
+prgmZPI
+Disp "="+Str0+" PER TIME"
+Disp "="+toString(round(R*G,5))
+Disp "(CHECK YOUR UNITS)"
+Goto G9
+Lbl 6
+ClrHome
+Disp "RAD=DEG*π/180","DEG=RAD*180/π","1 REV=360 DEG=2π RAD","1 DEG=60 MIN=3600 SEC","COTERMINAL +-360 OR 2π","COMPLEMENT ADDS TO 90","SUPPLEMENT ADDS TO 180"
+Pause 
+ClrHome
+Disp "ARC S=R*ANGLE","SECTOR=1/2*R²*ANGLE","  (ANGLE IN RADIANS)","ANGULAR OMEGA=ANGLE/TIME","LINEAR V=R*OMEGA"
+Lbl G9
+Pause 
+Goto M
+Lbl Q
+ClrHome

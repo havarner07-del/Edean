@@ -1,0 +1,15 @@
+"HELPER (X-H) STRING
+If X=0
+Then
+Str7→Str0
+Else
+If X>0
+Then
+prgmZFRAC
+"("+Str7+"-"+Str0+")"→Str0
+Else
+⁻X→X
+prgmZFRAC
+"("+Str7+"+"+Str0+")"→Str0
+End
+End

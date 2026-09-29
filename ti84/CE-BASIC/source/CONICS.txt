@@ -1,0 +1,464 @@
+Lbl M
+ClrHome
+Menu("CONICS CH 10","FROM STANDARD EQUATION",1,"FROM A,B,C OR FOCUS",2,"FROM GENERAL FORM",3,"FORMULAS",4,"QUIT",Q)
+Lbl 1
+Menu("WHICH EQUATION?","ELLIPSE OR CIRCLE",E1,"HYPERBOLA (X-H)² FIRST",H1,"HYPERBOLA (Y-K)² FIRST",H2,"PARABOLA (X-H)²=P(Y-K)",P1,"PARABOLA (Y-K)²=P(X-H)",P2,"BACK",M)
+Lbl E1
+ClrHome
+Disp "(X-H)²/A+(Y-K)²/B=1"
+Input "H=",H
+Input "K=",K
+Input "A=",A
+Input "B=",B
+Goto E
+Lbl H1
+1→O
+Goto H3
+Lbl H2
+0→O
+Lbl H3
+ClrHome
+If O
+Disp "(X-H)²/A-(Y-K)²/B=1"
+If not(O)
+Disp "(Y-K)²/A-(X-H)²/B=1"
+Input "H=",H
+Input "K=",K
+Input "A=",A
+Input "B=",B
+Goto Y
+Lbl P1
+1→O
+Goto P3
+Lbl P2
+0→O
+Lbl P3
+ClrHome
+If O
+Disp "(X-H)²=P(Y-K)"
+If not(O)
+Disp "(Y-K)²=P(X-H)"
+Input "H=",H
+Input "K=",K
+Input "P=",P
+Goto P
+Lbl 2
+Menu("FROM FEATURES","ELLIPSE",F1,"HYPERBOLA",F2,"PARABOLA",F3,"BACK",M)
+Lbl F1
+1→J
+Goto F4
+Lbl F2
+2→J
+Lbl F4
+ClrHome
+Disp "CENTER (H,K)"
+Input "H=",H
+Input "K=",K
+Input "HORIZ(1) OR VERT(0)? ",O
+Disp "A=CENTER TO VERTEX"
+Input "A=",A
+Input "KNOW B(1) OR C(2)? ",I
+If I=1
+Then
+Input "B=",B
+B²→B
+Else
+Input "C=",C
+If J=1
+A²-C²→B
+If J=2
+C²-A²→B
+End
+A²→A
+If J=2
+Goto Y
+If O
+Goto E
+A→C
+B→A
+C→B
+Goto E
+Lbl F3
+ClrHome
+Disp "VERTEX (H,K)"
+Input "H=",H
+Input "K=",K
+Input "FOCUS(1) DIRECTRIX(2)? ",I
+If I=2
+Goto F5
+Input "FOCUS X=",C
+Input "FOCUS Y=",D
+If C=H
+Then
+1→O
+4*(D-K)→P
+Else
+0→O
+4*(C-H)→P
+End
+Goto P
+Lbl F5
+Input "Y=NUM(1) OR X=NUM(2)? ",I
+Input "THE NUMBER=",C
+If I=1
+Then
+1→O
+4*(K-C)→P
+Else
+0→O
+4*(H-C)→P
+End
+Goto P
+Lbl 3
+ClrHome
+Disp "AX²+CY²+DX+EY+F=0"
+Input "A=",A
+Input "C=",C
+Input "D=",D
+Input "E=",E
+Input "F=",F
+If A≠0 and C≠0
+Goto G1
+If A≠0 and E≠0
+Goto G2
+If C≠0 and D≠0
+Goto G3
+Disp "NOT A CONIC"
+Goto G9
+Lbl G1
+⁻D/(2*A)→H
+⁻E/(2*C)→K
+A*H²+C*K²-F→R
+Disp "","COMPLETE THE SQUARE"
+H→X
+"X"→Str7
+prgmZSH
+Str0+"²"→Str3
+If A≠1
+Then
+A→X
+prgmZFRAC
+Str0+Str3→Str3
+End
+C→X
+prgmZSG
+If abs(C)≠1
+Str3+Str0→Str3
+If C=1
+Str3+"+"→Str3
+If C=⁻1
+Str3+"-"→Str3
+K→X
+"Y"→Str7
+prgmZSH
+Str3+Str0+"²"→Str3
+R→X
+prgmZFRAC
+Disp Str3,"="+Str0
+If R=0
+Disp "DEGENERATE (NO CONIC)"
+If R=0
+Goto G9
+If A*C>0 and R/A<0
+Disp "NO GRAPH"
+If A*C>0 and R/A<0
+Goto G9
+Pause 
+If A*C<0
+Goto G4
+R/A→A
+R/C→B
+Goto E
+Lbl G4
+If R/A>0
+Then
+1→O
+R/A→Q
+⁻R/C→B
+Q→A
+Else
+0→O
+R/C→Q
+⁻R/A→B
+Q→A
+End
+Goto Y
+Lbl G2
+⁻D/(2*A)→H
+(A*H²-F)/E→K
+⁻E/A→P
+1→O
+Goto P
+Lbl G3
+⁻E/(2*C)→K
+(C*K²-F)/D→H
+⁻D/C→P
+0→O
+Goto P
+Lbl E
+ClrHome
+If A≤0 or B≤0
+Disp "A AND B MUST BE > 0"
+If A≤0 or B≤0
+Goto G9
+H→X
+"X"→Str7
+prgmZSH
+Str0→Str3
+A→X
+prgmZFRAC
+If inString(Str0,"/")
+"("+Str0+")"→Str0
+Str3+"²/"+Str0+"+"→Str3
+K→X
+"Y"→Str7
+prgmZSH
+Str3+Str0+"²/"→Str3
+B→X
+prgmZFRAC
+If inString(Str0,"/")
+"("+Str0+")"→Str0
+Disp Str3+Str0+"=1"
+{H,K}→L₄
+prgmZPT
+Disp "CENTER "+Str0
+If A=B
+Then
+A→X
+prgmZRAD
+Disp "CIRCLE, RADIUS="+Str0
+End
+If A=B
+Goto G9
+A>B→O
+max(A,B)→I
+min(A,B)→J
+I-J→L
+If O
+Disp "ELLIPSE, MAJOR AXIS HORIZ"
+If not(O)
+Disp "ELLIPSE, MAJOR AXIS VERT"
+I→X
+prgmZRAD
+"A="+Str0→Str3
+J→X
+prgmZRAD
+Str3+"  B="+Str0→Str3
+L→X
+prgmZRAD
+Disp Str3+"  C="+Str0
+Disp "(C²=A²-B²)"
+L/I→X
+prgmZRAD
+Disp "ECCENTRICITY C/A="+Str0
+Pause 
+ClrHome
+If O
+Then
+H→Q
+K→R
+Else
+K→Q
+H→R
+End
+I→X
+prgmZPM
+Disp "VERTICES",Str1,Str2
+L→X
+prgmZPM
+Disp "FOCI",Str1,Str2
+not(O)→O
+J→X
+{Q,R}→L₁
+L₁(2)→Q
+L₁(1)→R
+prgmZPM
+Disp "CO-VERTICES",Str1,Str2
+Goto G9
+Lbl Y
+ClrHome
+If A≤0 or B≤0
+Disp "A AND B MUST BE > 0"
+If A≤0 or B≤0
+Goto G9
+H→X
+"X"→Str7
+prgmZSH
+Str0→Str4
+K→X
+"Y"→Str7
+prgmZSH
+Str0→Str5
+A→X
+prgmZFRAC
+If inString(Str0,"/")
+"("+Str0+")"→Str0
+Str0→Str3
+B→X
+prgmZFRAC
+If inString(Str0,"/")
+"("+Str0+")"→Str0
+If O
+Disp Str4+"²/"+Str3+"-"+Str5+"²/"+Str0+"=1"
+If not(O)
+Disp Str5+"²/"+Str3+"-"+Str4+"²/"+Str0+"=1"
+If O
+Disp "HYPERBOLA OPENS LEFT/RIGHT"
+If not(O)
+Disp "HYPERBOLA OPENS UP/DOWN"
+{H,K}→L₄
+prgmZPT
+Disp "CENTER "+Str0
+A+B→L
+A→X
+prgmZRAD
+"A="+Str0→Str3
+B→X
+prgmZRAD
+Str3+"  B="+Str0→Str3
+L→X
+prgmZRAD
+Disp Str3+"  C="+Str0
+Disp "(C²=A²+B²)"
+L/A→X
+prgmZRAD
+Disp "ECCENTRICITY C/A="+Str0
+Pause 
+ClrHome
+If O
+Then
+H→Q
+K→R
+Else
+K→Q
+H→R
+End
+A→X
+prgmZPM
+Disp "VERTICES",Str1,Str2
+L→X
+prgmZPM
+Disp "FOCI",Str1,Str2
+Pause 
+ClrHome
+If O
+B/A→M
+If not(O)
+A/B→M
+M→X
+prgmZRAD
+Str0→Str6
+Disp "ASYMPTOTES","SLOPE +-"+Str6
+Disp Str5+"=+-"+Str6+Str4
+√(M)→N
+N→X
+prgmZFRAC
+"Y="+Str0+"X"→Str3
+K-N*H→X
+prgmZSG
+If K-N*H≠0
+Str3+Str0→Str3
+Disp Str3
+⁻N→X
+prgmZFRAC
+"Y="+Str0+"X"→Str3
+K+N*H→X
+prgmZSG
+If K+N*H≠0
+Str3+Str0→Str3
+Disp Str3
+Goto G9
+Lbl P
+ClrHome
+If P=0
+Disp "P CANNOT BE 0"
+If P=0
+Goto G9
+P/4→N
+H→X
+"X"→Str7
+prgmZSH
+Str0→Str4
+K→X
+"Y"→Str7
+prgmZSH
+Str0→Str5
+P→X
+prgmZFRAC
+If O
+Disp Str4+"²="+Str0+Str5
+If not(O)
+Disp Str5+"²="+Str0+Str4
+If O and N>0
+Disp "PARABOLA OPENS UP"
+If O and N<0
+Disp "PARABOLA OPENS DOWN"
+If not(O) and N>0
+Disp "PARABOLA OPENS RIGHT"
+If not(O) and N<0
+Disp "PARABOLA OPENS LEFT"
+{H,K}→L₄
+prgmZPT
+Disp "VERTEX "+Str0
+P→X
+prgmZFRAC
+Str0→Str3
+N→X
+prgmZFRAC
+Disp "4P="+Str3+"   P="+Str0
+If O
+{H,K+N}→L₄
+If not(O)
+{H+N,K}→L₄
+prgmZPT
+Disp "FOCUS "+Str0
+If O
+Then
+K-N→X
+prgmZFRAC
+Disp "DIRECTRIX Y="+Str0
+H→X
+prgmZFRAC
+Disp "AXIS X="+Str0
+Else
+H-N→X
+prgmZFRAC
+Disp "DIRECTRIX X="+Str0
+K→X
+prgmZFRAC
+Disp "AXIS Y="+Str0
+End
+Pause 
+abs(P)→X
+prgmZFRAC
+Disp "LATUS RECTUM LENGTH="+Str0
+If O
+{H-2*N,K+N}→L₄
+If not(O)
+{H+N,K-2*N}→L₄
+prgmZPT
+Disp "ENDS "+Str0
+If O
+{H+2*N,K+N}→L₄
+If not(O)
+{H+N,K+2*N}→L₄
+prgmZPT
+Disp "     "+Str0
+Goto G9
+Lbl 4
+ClrHome
+Disp "ELLIPSE","A=BIGGEST DENOMINATOR","C²=A²-B²","FOCI ON MAJOR AXIS","E=C/A (LESS THAN 1)","CIRCLE","(X-H)²+(Y-K)²=R²"
+Pause 
+ClrHome
+Disp "HYPERBOLA","A² UNDER POSITIVE TERM","C²=A²+B²","ASYMPTOTE SLOPE","B/A HORIZ, A/B VERT","E=C/A (MORE THAN 1)"
+Pause 
+ClrHome
+Disp "PARABOLA","(X-H)²=4P(Y-K) UP/DOWN","(Y-K)²=4P(X-H) SIDEWAYS","FOCUS P FROM VERTEX","DIRECTRIX P OTHER SIDE","LATUS RECTUM=ABS(4P)"
+Pause 
+ClrHome
+Disp "AX²+CY²+DX+EY+F=0","A=C  CIRCLE","AC>0 ELLIPSE","AC<0 HYPERBOLA","A OR C=0  PARABOLA"
+Lbl G9
+Pause 
+Goto M
+Lbl Q
+ClrHome

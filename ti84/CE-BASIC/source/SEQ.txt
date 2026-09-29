@@ -1,0 +1,237 @@
+Lbl M
+ClrHome
+Menu("SEQUENCES CH 11","ARITHMETIC",1,"GEOMETRIC",2,"REPEATING DECIMAL",3,"TERMS AND SUM OF AN",4,"RECURSIVE SEQUENCE",5,"INDUCTION CHECK",6,"FORMULAS",7,"QUIT",Q)
+Lbl 1
+Menu("ARITHMETIC","KNOW A1 AND D",A1,"KNOW TWO TERMS",A2,"BACK",M)
+Lbl A1
+ClrHome
+Input "A1=",A
+Input "D=",D
+Goto A3
+Lbl A2
+ClrHome
+Input "TERM NUMBER M=",M
+Input "VALUE OF TERM M=",B
+Input "TERM NUMBER N=",N
+Input "VALUE OF TERM N=",C
+(C-B)/(N-M)→D
+B-(M-1)*D→A
+Lbl A3
+ClrHome
+D→X
+prgmZFRAC
+Disp "D="+Str0
+A→X
+prgmZFRAC
+Disp "A1="+Str0
+Disp "AN=A1+(N-1)D"
+D→X
+prgmZFRAC
+"AN="+Str0+"N"→Str1
+A-D→X
+prgmZSG
+If A-D≠0
+Str1+Str0→Str1
+Disp Str1
+Pause 
+Lbl A4
+Menu("ARITHMETIC","FIND AN AND SN",A5,"WHICH TERM IS A VALUE?",A6,"MAIN MENU",M)
+Lbl A5
+ClrHome
+Input "N=",N
+A+(N-1)*D→B
+B→X
+prgmZFRAC
+Disp "A"+toString(N)+"="+Str0
+Disp "SN=N/2*(A1+AN)"
+N*(A+B)/2→X
+prgmZFRAC
+Disp "S"+toString(N)+"="+Str0
+Pause 
+Goto A4
+Lbl A6
+ClrHome
+Input "VALUE=",B
+(B-A)/D+1→N
+If N=int(N) and N>0
+Disp "IT IS TERM NUMBER "+toString(N)
+If N≠int(N) or N≤0
+Disp "NOT A TERM"
+Pause 
+Goto A4
+Lbl 2
+Menu("GEOMETRIC","KNOW A1 AND R",B1,"KNOW TWO TERMS",B2,"BACK",M)
+Lbl B1
+ClrHome
+Input "A1=",A
+Input "R=",R
+1→M
+A→B
+Goto B4
+Lbl B2
+ClrHome
+Input "TERM NUMBER M=",M
+Input "VALUE OF TERM M=",B
+Input "TERM NUMBER N=",N
+Input "VALUE OF TERM N=",C
+C/B→Q
+N-M→E
+If Q<0 and fPart(E/2)=0
+Disp "NO REAL R"
+If Q<0 and fPart(E/2)=0
+Goto G9
+abs(Q)^(1/E)→R
+If Q<0
+⁻R→R
+If Q>0 and fPart(E/2)=0
+Then
+R→X
+prgmZFRAC
+Disp "TWO ANSWERS","R="+Str0+" OR R=⁻"+Str0
+Disp "(SHOWING R="+Str0+")"
+Pause 
+End
+B/R^(M-1)→A
+Lbl B4
+ClrHome
+R→X
+prgmZFRAC
+Str0→Str2
+Disp "R="+Str2
+A→X
+prgmZFRAC
+Str0→Str1
+Disp "A1="+Str1
+Disp "AN=A1*R^(N-1)"
+Disp "AN="+Str1+"("+Str2+")^(N-1)"
+If abs(R)<1
+Then
+A/(1-R)→X
+prgmZFRAC
+Disp "INFINITE SUM=A1/(1-R)","="+Str0
+Else
+Disp "NO INFINITE SUM","(ABS(R) NOT LESS THAN 1)"
+End
+Pause 
+Lbl B5
+Menu("GEOMETRIC","FIND AN AND SN",B6,"USE OTHER R (-R)",B7,"MAIN MENU",M)
+Lbl B6
+ClrHome
+Input "N=",N
+A*R^(N-1)→X
+prgmZFRAC
+Disp "A"+toString(N)+"="+Str0
+Disp "SN=A1(1-R^N)/(1-R)"
+If R=1
+N*A→X
+If R≠1
+A*(1-R^N)/(1-R)→X
+prgmZFRAC
+Disp "S"+toString(N)+"="+Str0
+Pause 
+Goto B5
+Lbl B7
+⁻R→R
+B/R^(M-1)→A
+Goto B4
+Lbl 3
+ClrHome
+Disp "EX 2.1363636...","TYPE 2.136 AND 2"
+Input "DECIMAL THRU 1ST REPEAT=",X
+Input "HOW MANY DIGITS REPEAT=",Q
+0→K
+While abs(10^K*X-round(10^K*X,0))>1ᴇ⁻6 and K<12
+K+1→K
+End
+round(10^K*X,0)-int(10^(K-Q)*X)→A
+10^K-10^(K-Q)→B
+gcd(abs(A),B)→C
+A/C→A
+B/C→B
+If B=1
+Disp "FRACTION="+toString(A)
+If B≠1
+Disp "FRACTION="+toString(A)+"/"+toString(B)
+Goto G9
+Lbl 4
+ClrHome
+Disp "TYPE AN USING N","EX (⁻1)^N/(N+1)"
+Input "AN=",Str3
+Input "START N=",B
+Input "END N=",C
+ClrHome
+0→G
+For(N,B,C)
+expr(Str3)→D
+G+D→G
+If N-B<12
+Then
+D→X
+prgmZFRAC
+Disp "A"+toString(N)+"="+Str0
+End
+If fPart((N-B+1)/9)=0 and N<C and N-B<12
+Pause 
+End
+G→X
+prgmZFRAC
+Disp "SUM="+Str0
+Goto G9
+Lbl 5
+ClrHome
+Disp "USE P FOR PREVIOUS TERM","EX 2P+1"
+Input "A1=",P
+Input "AN=",Str3
+Input "HOW MANY TERMS=",C
+ClrHome
+P→X
+prgmZFRAC
+Disp "A1="+Str0
+For(N,2,C)
+expr(Str3)→P
+P→X
+prgmZFRAC
+Disp "A"+toString(N)+"="+Str0
+If fPart(N/9)=0 and N<C
+Pause 
+End
+Goto G9
+Lbl 6
+ClrHome
+Disp "CHECKS A SUM FORMULA","FOR N=1 TO 10. USE N."
+Input "TERM AN=",Str3
+Input "FORMULA SN=",Str4
+0→G
+1→F
+For(N,1,10)
+G+expr(Str3)→G
+expr(Str4)→D
+If F and abs(G-D)>1ᴇ⁻6*max(1,abs(G))
+Then
+0→F
+Disp "FAILS AT N="+toString(N)
+G→X
+prgmZFRAC
+Disp "REAL SUM="+Str0
+D→X
+prgmZFRAC
+Disp "FORMULA GIVES="+Str0
+End
+End
+If F
+Disp "TRUE FOR N=1 TO 10"
+Pause 
+ClrHome
+Disp "PROOF STEPS","1 BASE CASE SHOW A1=S1","2 ASSUME TRUE FOR N=K","3 ADD A(K+1) TO BOTH","  SIDES, SIMPLIFY TO","  THE FORMULA WITH K+1"
+Goto G9
+Lbl 7
+ClrHome
+Disp "ARITHMETIC","AN=A1+(N-1)D","SN=N/2*(A1+AN)","SN=N/2*(2A1+(N-1)D)","GEOMETRIC","AN=A1*R^(N-1)","SN=A1(1-R^N)/(1-R)","INFINITE SUM=A1/(1-R)","  ONLY IF ABS(R)<1"
+Pause 
+ClrHome
+Disp "SUM OF I = N(N+1)/2","SUM OF I² =","  N(N+1)(2N+1)/6","SUM OF I³ = (N(N+1)/2)²","SUM OF C = CN","N! =1*2*3*...*N, 0! =1"
+Lbl G9
+Pause 
+Goto M
+Lbl Q
+ClrHome

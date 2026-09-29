@@ -1,0 +1,36 @@
+"HELPER POINTS Q+-√(X)
+{X,√(X)}→L₅
+R→X
+prgmZFRAC
+Str0→Str9
+L₅(1)→X
+prgmZRAD
+If W
+Then
+Str0→Str8
+Q→X
+prgmZFRAC
+If Q=0
+Then
+Str8→Str1
+"⁻"+Str8→Str2
+Else
+Str0+"+"+Str8→Str1
+Str0+"-"+Str8→Str2
+End
+Else
+Q+L₅(2)→X
+prgmZFRAC
+Str0→Str1
+Q-L₅(2)→X
+prgmZFRAC
+Str0→Str2
+End
+If O
+Then
+"("+Str1+","+Str9+")"→Str1
+"("+Str2+","+Str9+")"→Str2
+Else
+"("+Str9+","+Str1+")"→Str1
+"("+Str9+","+Str2+")"→Str2
+End
